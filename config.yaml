@@ -1,0 +1,36 @@
+dlive:
+  # mix rack ip
+  ip: 192.168.1.70
+
+  # uses unencrypted traffic over port 51325 if 'use_auth' is disabled and
+  # TLS/SSL over port 51327 if enabled
+  use_auth: false
+  user_profile: 0x00
+  user_password: ''
+
+  # see lower number of range selected in Utility/Control/MIDI (default: 12)
+  midi_bank_offset: 12
+
+streamdeck:
+    devices:
+      # device serials
+      system: 'AL47J2C09831'
+      input: 'CL15K1A02081'
+      output: 'CL15K1A02084'
+
+control:
+  aux:
+    # define which scene to call when selecting the first aux channel
+    # the subsequent aux channel will use the subsequent scene index and so on
+    scene_start: 401
+
+    # number of aux channels/scenes to map
+    amount: 8
+
+midi:
+  out:
+    port_name: 'dLive Proxy Feedback'
+    channel: 1
+
+  in:
+    port_name: 'dLive Proxy Control'

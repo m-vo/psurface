@@ -1,0 +1,22 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+python-rtmidi = "*"
+PyYAML = "*"
+streamdeck = "*"
+pillow = "*"
+wheel = "*"
+apscheduler = "*"
+mido = {editable = true, ref = "dlive-fixes", git = "https://github.com/m-vo/mido.git"}
+
+[dev-packages]
+black = "*"
+
+[requires]
+python_version = "3.8"
+
+[pipenv]
+allow_prereleases = true
