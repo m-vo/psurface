@@ -1,8 +1,7 @@
 import re
 import typing
 from copy import copy
-from enum import Enum, auto
-from math import log
+from enum import Enum
 
 from common.event import Event
 
@@ -20,6 +19,10 @@ def _make_bank_lookups(bank_map: dict) -> tuple:
 
 
 class Color(Enum):
+    """
+    Channel color
+    """
+
     OFF = 0x00, (0x20, 0x20, 0x20)
     RED = 0x01, (0xFF, 0x00, 0x00)
     GREEN = 0x02, (0x00, 0xFF, 0x00)
@@ -46,6 +49,11 @@ class Color(Enum):
 
 
 class Level(int):
+    """
+    Channel or send level. Values have a linear dependency to dBu values
+    and a logarithmic dependency to physical fader positions.
+    """
+
     VALUE_FULL = 0x7F
     VALUE_ZERO = 0x00
     VALUE_FADER_MIDPOINT = 0x58
@@ -65,6 +73,10 @@ class Level(int):
 
 
 class Bank(Enum):
+    """
+    Channel bank
+    """
+
     INPUT = 0, "Ip"
     MONO_GROUP = 1, "Grp"
     STEREO_GROUP = 2, "StGrp"
@@ -96,6 +108,10 @@ class Bank(Enum):
 
 
 class ChannelIdentifier:
+    """
+    Bank and offset information uniquely describing a channel.
+    """
+
     _BANK_MAP = {
         0: {
             0x00: Bank.INPUT,
@@ -160,9 +176,18 @@ class ChannelIdentifier:
 
         raise IndexError("Invalid channel offset")
 
+    def __str__(self):
+        return "{}#{} {{ N_base={}, CH={} }}".format(
+            self.bank.name[5:],
+            self.canonical_index,
+            self.midi_bank_offset,
+            self.midi_channel_index,
+        )
+
     def __eq__(self, other: "ChannelIdentifier"):
         return (
-            self._bank == other._bank
+            other is not None
+            and self._bank == other._bank
             and self._canonical_index == other._canonical_index
         )
 
@@ -171,6 +196,11 @@ class ChannelIdentifier:
 
 
 class Channel:
+    """
+    Basic channel entity, that implements a property observer pattern: setting values will trigger the respective
+    change event if the value differs from the internal state.
+    """
+
     def __init__(self, identifier: ChannelIdentifier):
         self._identifier: ChannelIdentifier = identifier
 
@@ -280,13 +310,16 @@ class Channel:
         return True
 
     def __str__(self):
-        return "Channel {}#{} '{}' {{ N_base={}, CH={} }}".format(
-            self._identifier.bank.name[5:],
-            self._identifier.canonical_index,
+        return "Channel '{}' {}".format(
             self._label,
-            self._identifier.midi_bank_offset,
-            self._identifier.midi_channel_index,
+            self._identifier,
         )
+
+    def __eq__(self, other: "Channel"):
+        return other is not None and self._identifier == other._identifier
+
+    def __hash__(self):
+        return hash(self._identifier)
 
 
 class OutputChannel(Channel):
@@ -335,9 +368,11 @@ class InputChannel(Channel):
         return True
 
     def backup_sends(self) -> None:
+        """Create snapshot of the current send levels."""
         self._sends_snapshot = copy(self._sends)
 
     def restore_sends(self) -> None:
+        """Restore send levels from the snapshot and clear 'affected by s_dca' state."""
         self._sends = self._sends_snapshot
         self._sends_snapshot = {}
         self._affected_by_s_dca = False
@@ -356,7 +391,12 @@ class InputChannel(Channel):
         return self._affected_by_s_dca
 
 
-class VirtualChannel(Channel):
+class VirtualChannel(OutputChannel):
+    """
+    A virtual channel tracks the (send) levels of another channel.
+    This mapping can be dynamically changed at runtime.
+    """
+
     _MODE_NONE = -1
     _MODE_TIE_TO_ZERO = 0
     _MODE_TRACK_LEVEL = 1
@@ -371,44 +411,50 @@ class VirtualChannel(Channel):
             typing.Tuple[InputChannel, Level]
         ] = []
 
-        self.request_send_level_event = Event()
         self._read_send_level_once = False
         self._mode = self._MODE_NONE
 
-    def bind_send(self, base: InputChannel, to_channel: OutputChannel) -> None:
-        self._channel_base = base
+    def bind_send(self, base_channel: InputChannel, to_channel: OutputChannel) -> None:
+        """Track the send level to a given output of a given base channel."""
+        self._channel_base = base_channel
         self._channel_send = to_channel
         self._mode = self._MODE_TRACK_LEVEL
 
-        # get label, color and current level once
+        # set label and color from send channel
         self.set_label(f">{to_channel.label}")
         self.set_color(to_channel.color)
-        self._read_send_level_once = True
-        self.request_send_level_event(base, to_channel)
+
+        # initialize fader level
+        self.set_level(base_channel.get_send_level(to_channel))
 
     def bind_s_dca(
-        self, affected_channels: typing.List[InputChannel], to_channel: OutputChannel
+        self, base_channels: typing.List[InputChannel], to_channel: OutputChannel
     ) -> None:
+        """Simultaneously track a send level to a given output on multiple base channels."""
         self._affected_s_dca_channels = list(
             zip(
-                affected_channels,
-                map(lambda c: c.get_send_level(to_channel), affected_channels),
+                base_channels,
+                map(lambda c: c.get_send_level(to_channel), base_channels),
             )
         )
         self._channel_send = to_channel
         self._mode = self._MODE_DCA
 
-        # get label, color and set fader to midpoint
+        # set label and color from send channel
         self.set_label(f"={to_channel.label}")
         self.set_color(to_channel.color)
+
+        # initialize fader level at midpoint
         self.set_level(Level(Level.VALUE_FADER_MIDPOINT))
 
     def tie_to_zero(self):
+        """Make the fader stick to the -inf/bottom position."""
         self.reset()
         self._mode = self._MODE_TIE_TO_ZERO
         self.set_level(Level(0))
 
     def reset(self) -> None:
+        """Reset and unbind this virtual channel."""
         self._channel_base = None
         self._channel_send = None
         self._affected_s_dca_channels = None
@@ -424,9 +470,11 @@ class VirtualChannel(Channel):
             level, trigger_change_event
         )
 
+        # Handle modes
         if track_level_change:
             if self._mode == self._MODE_TIE_TO_ZERO:
-                self.set_level(Level(0))
+                if level > 0:
+                    self.set_level(Level(0))
             elif (
                 self._mode == self._MODE_TRACK_LEVEL
                 and self._channel_base
@@ -438,29 +486,12 @@ class VirtualChannel(Channel):
 
         return track_level_change
 
-    def set_send_level(
-        self,
-        identifier: ChannelIdentifier,
-        to_channel_identifier: ChannelIdentifier,
-        level: Level,
-    ) -> None:
-        if (
-            not self._read_send_level_once
-            or not self._channel_base
-            or not self._channel_send
-            or not identifier == self._channel_base.identifier
-            or not to_channel_identifier == self._channel_send.identifier
-        ):
-            return
-
-        self._read_send_level_once = False
-        self.set_level(level)
-
     def _apply_s_dca_values(self, level: Level) -> None:
         if level == Level(Level.VALUE_FADER_MIDPOINT):
             return
 
         for channel, base_level in self._affected_s_dca_channels:
+            # todo: Consider moving value logic to Level entity
             reference = (Level.VALUE_ZERO, Level.VALUE_FULL)[
                 level > Level.VALUE_FADER_MIDPOINT
             ]

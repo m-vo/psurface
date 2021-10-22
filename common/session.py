@@ -4,7 +4,7 @@ from apscheduler.schedulers import SchedulerNotRunningError
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from common.event import Event
-from common.state import (
+from dlive.entity import (
     Channel,
     InputChannel,
     OutputChannel,
@@ -139,8 +139,6 @@ class Session:
         # setup virtual channels
         for channel in self._virtual.values():
             channel.reset()
-            channel.request_send_level_event.append(self._encoder.request_send_level)
-            self._decoder.send_level_changed_event.append(channel.set_send_level)
 
         # poll color attribute every few seconds, as it is currently not
         # transmitted on change
@@ -156,8 +154,8 @@ class Session:
             id="poll_session_updates",
             replace_existing=True,
         )
-        # todo
-        # self._scheduler.start()
+
+        self._scheduler.start()
 
     def load_scene(self, scene: int):
         self._encoder.recall_scene(scene)
@@ -374,5 +372,14 @@ class LayerController:
             self.selection_update_event()
 
     def _on_scene_change(self, scene: int):
-        # todo
-        pass
+        """Handle manual scene changes and try to find a suitable mode."""
+        if scene == self._scenes["default"] and self._mode != self._MODE_DEFAULT:
+            self.select_default()
+            return
+
+        scene_offset = scene - self._scenes["output_start"]
+        if 0 <= scene_offset < len(self._session.output_channels):
+            channel = self._session.output_channels[scene_offset]
+
+            if not channel.selected:
+                self.select_output(channel)

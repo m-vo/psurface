@@ -4,7 +4,7 @@ from typing import Deque
 from common.event import Event
 from mido.messages.messages import SysexData, Message
 
-from common.state import (
+from dlive.entity import (
     Channel,
     Level,
     Color,

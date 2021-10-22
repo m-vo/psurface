@@ -1,6 +1,6 @@
 from typing import Callable, Dict, Tuple, Optional
 
-from common.state import Channel
+from dlive.entity import Channel
 
 
 class FragmentRenderer:
