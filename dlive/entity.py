@@ -161,18 +161,14 @@ class ChannelIdentifier:
         return self._CHANNEL_OFFSET_BY_BANK[self._bank] + self._canonical_index
 
     @classmethod
-    def from_raw_data(
-        cls, bank_offset: int, channel_offset: int
-    ) -> "ChannelIdentifier":
+    def from_raw_data(cls, bank_offset: int, channel_offset: int) -> "ChannelIdentifier":
         if bank_offset not in ChannelIdentifier._BANK_MAP:
             raise IndexError("Invalid bank offset")
 
         banks = ChannelIdentifier._BANK_MAP[bank_offset]
         for channel_offset_start in reversed(banks):
             if channel_offset_start <= channel_offset:
-                return ChannelIdentifier(
-                    banks[channel_offset_start], channel_offset - channel_offset_start
-                )
+                return ChannelIdentifier(banks[channel_offset_start], channel_offset - channel_offset_start)
 
         raise IndexError("Invalid channel offset")
 
@@ -185,11 +181,7 @@ class ChannelIdentifier:
         )
 
     def __eq__(self, other: "ChannelIdentifier"):
-        return (
-            other is not None
-            and self._bank == other._bank
-            and self._canonical_index == other._canonical_index
-        )
+        return other is not None and self._bank == other._bank and self._canonical_index == other._canonical_index
 
     def __hash__(self):
         return hash((self._bank, self._canonical_index))
@@ -407,9 +399,7 @@ class VirtualChannel(OutputChannel):
 
         self._channel_base: typing.Optional[InputChannel] = None
         self._channel_send: typing.Optional[OutputChannel] = None
-        self._affected_s_dca_channels: typing.List[
-            typing.Tuple[InputChannel, Level]
-        ] = []
+        self._affected_s_dca_channels: typing.List[typing.Tuple[InputChannel, Level]] = []
 
         self._read_send_level_once = False
         self._mode = self._MODE_NONE
@@ -427,9 +417,7 @@ class VirtualChannel(OutputChannel):
         # initialize fader level
         self.set_level(base_channel.get_send_level(to_channel))
 
-    def bind_s_dca(
-        self, base_channels: typing.List[InputChannel], to_channel: OutputChannel
-    ) -> None:
+    def bind_s_dca(self, base_channels: typing.List[InputChannel], to_channel: OutputChannel) -> None:
         """Simultaneously track a send level to a given output on multiple base channels."""
         self._affected_s_dca_channels = list(
             zip(
@@ -466,20 +454,14 @@ class VirtualChannel(OutputChannel):
         self.set_mute(False)
 
     def set_level(self, level: Level, trigger_change_event: bool = True) -> bool:
-        track_level_change = super(VirtualChannel, self).set_level(
-            level, trigger_change_event
-        )
+        track_level_change = super(VirtualChannel, self).set_level(level, trigger_change_event)
 
         # Handle modes
         if track_level_change:
             if self._mode == self._MODE_TIE_TO_ZERO:
                 if level > 0:
                     self.set_level(Level(0))
-            elif (
-                self._mode == self._MODE_TRACK_LEVEL
-                and self._channel_base
-                and self._channel_send
-            ):
+            elif self._mode == self._MODE_TRACK_LEVEL and self._channel_base and self._channel_send:
                 self._channel_base.set_send_level(self._channel_send, level)
             elif self._mode == self._MODE_DCA and self._channel_send:
                 self._apply_s_dca_values(level)
@@ -492,9 +474,7 @@ class VirtualChannel(OutputChannel):
 
         for channel, base_level in self._affected_s_dca_channels:
             # todo: Consider moving value logic to Level entity
-            reference = (Level.VALUE_ZERO, Level.VALUE_FULL)[
-                level > Level.VALUE_FADER_MIDPOINT
-            ]
+            reference = (Level.VALUE_ZERO, Level.VALUE_FULL)[level > Level.VALUE_FADER_MIDPOINT]
             diff = (
                 (reference - base_level)
                 * (level - Level.VALUE_FADER_MIDPOINT)

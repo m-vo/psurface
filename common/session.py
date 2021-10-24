@@ -200,9 +200,7 @@ class Session:
         if self._scene != scene:
             self.scene_update_event(scene)
 
-    def _lookup_channel(
-        self, identifier: ChannelIdentifier
-    ) -> typing.Optional[Channel]:
+    def _lookup_channel(self, identifier: ChannelIdentifier) -> typing.Optional[Channel]:
         hash_index = identifier.__hash__()
 
         if hash_index in self._channels:
@@ -257,9 +255,7 @@ class LayerController:
 
         self._select_exclusively(channel)
 
-        mix_output_scene = (
-            self._scenes["output_start"] + channel.identifier.canonical_index
-        )
+        mix_output_scene = self._scenes["output_start"] + channel.identifier.canonical_index
         self._session.load_scene(mix_output_scene)
 
     def select_input(self, channel: InputChannel) -> None:
@@ -297,9 +293,7 @@ class LayerController:
         if not self._s_dca_active:
             return
 
-        for channel in filter(
-            lambda c: c.affected_by_s_dca, self._session.input_channels
-        ):
+        for channel in filter(lambda c: c.affected_by_s_dca, self._session.input_channels):
             channel.restore_sends()
 
         for channel in self._session.virtual_channels:
@@ -338,9 +332,7 @@ class LayerController:
 
     def _toggle_s_dca_channel(self, channel: InputChannel):
         channel.select(not channel.selected)
-        affected_channels = list(
-            filter(lambda c: c.selected, self._session.input_channels)
-        )
+        affected_channels = list(filter(lambda c: c.selected, self._session.input_channels))
 
         # patch virtual channels
         virtual_channels = self._session.virtual_channels

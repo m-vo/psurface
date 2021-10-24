@@ -25,9 +25,7 @@ from streamdeck.util import FragmentRenderer
 
 
 class DeckUI:
-    def __init__(
-        self, devices_config: dict, session: Session, layer_controller: LayerController
-    ):
+    def __init__(self, devices_config: dict, session: Session, layer_controller: LayerController):
         self._session = session
         self._layer_controller = layer_controller
 
@@ -66,15 +64,9 @@ class DeckUI:
 
         self._settings = GlobalSettings()
 
-        self._system_surface = SystemSurface(
-            devices["system"], self._settings, session, layer_controller
-        )
-        self._input_surface = InputSurface(
-            devices["input"], self._settings, session, layer_controller
-        )
-        self._output_surface = OutputSurface(
-            devices["output"], self._settings, session, layer_controller
-        )
+        self._system_surface = SystemSurface(devices["system"], self._settings, session, layer_controller)
+        self._input_surface = InputSurface(devices["input"], self._settings, session, layer_controller)
+        self._output_surface = OutputSurface(devices["output"], self._settings, session, layer_controller)
 
         # Displayed entities
         self._displayed_channels = {}
@@ -196,9 +188,7 @@ class Surface:
         streamdeck_original_map = {0: 20, 1: 29, 2: 43, 3: 50, 4: 60}
         streamdeck_xl_map = {0: 18, 1: 28, 2: 43, 3: 65, 4: 100}
 
-        value_set = (streamdeck_original_map, streamdeck_xl_map)[
-            isinstance(self._deck, StreamDeckXL)
-        ]
+        value_set = (streamdeck_original_map, streamdeck_xl_map)[isinstance(self._deck, StreamDeckXL)]
         self._deck.set_brightness(value_set[self._settings.brightness])
 
     def _set_image(self, key: int, image: Image):
@@ -252,9 +242,7 @@ class Surface:
             outline=None,
         )
 
-    def _render_component_badge(
-        self, draw: Draw, coords_bl: Tuple[int, int], label: str, fill, stroke
-    ) -> None:
+    def _render_component_badge(self, draw: Draw, coords_bl: Tuple[int, int], label: str, fill, stroke) -> None:
         draw.rounded_rectangle(
             (coords_bl[0], coords_bl[1], coords_bl[0] + 52, coords_bl[1] + 18),
             radius=4,
@@ -269,9 +257,7 @@ class Surface:
             fill=stroke,
         )
 
-    def _render_component_mute_badge(
-        self, draw: Draw, channel: Channel, coords_bl: Tuple[int, int]
-    ) -> None:
+    def _render_component_mute_badge(self, draw: Draw, channel: Channel, coords_bl: Tuple[int, int]) -> None:
         self._render_component_badge(
             draw,
             coords_bl,
@@ -280,9 +266,7 @@ class Surface:
             stroke=("black", "white")[channel.selected],
         )
 
-    def _render_component_s_dca_badge(
-        self, draw: Draw, coords_bl: Tuple[int, int], enabled: bool = True
-    ) -> None:
+    def _render_component_s_dca_badge(self, draw: Draw, coords_bl: Tuple[int, int], enabled: bool = True) -> None:
         self._render_component_badge(
             draw,
             coords_bl,
@@ -406,9 +390,7 @@ class SystemSurface(Surface):
     ):
         super(SystemSurface, self).__init__(device, settings, session, layer_controller)
 
-        self._assets["icon_brightness"] = os.path.join(
-            self._assets_path, "brightness.png"
-        )
+        self._assets["icon_brightness"] = os.path.join(self._assets_path, "brightness.png")
         self._assets["icon_direct"] = os.path.join(self._assets_path, "direct.png")
         self._assets["icon_left"] = os.path.join(self._assets_path, "left.png")
 
@@ -487,9 +469,7 @@ class SystemSurface(Surface):
 
         if self._settings.direct_action:
             active_color = (255, 0, 50)
-            image = ImageOps.colorize(
-                image.convert("L"), black="black", white=active_color
-            )
+            image = ImageOps.colorize(image.convert("L"), black="black", white=active_color)
 
             draw = ImageDraw.Draw(image)
             draw.ellipse(

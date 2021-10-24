@@ -64,9 +64,7 @@ class Decoder(Protocol):
 
                 if parameter_id == 0x17:
                     # (!) level
-                    self.level_changed_event(
-                        self._decode_channel_identifier(n, ch), Level(value)
-                    )
+                    self.level_changed_event(self._decode_channel_identifier(n, ch), Level(value))
                 else:
                     # ignore unknown parameter
                     pass
@@ -86,9 +84,7 @@ class Decoder(Protocol):
                 ch = m[1].note
 
                 # (!) mute on/off
-                self.mute_changed_event(
-                    self._decode_channel_identifier(n, ch), 0x7F == m[1].velocity
-                )
+                self.mute_changed_event(self._decode_channel_identifier(n, ch), 0x7F == m[1].velocity)
 
                 m.clear()
                 return
@@ -108,10 +104,7 @@ class Decoder(Protocol):
     def _decode_sysex_data(self, data: SysexData):
         minimum_data_length = 4
 
-        if (
-            len(data) < len(self.SYSEX_HEADER) + minimum_data_length
-            or list(data[:7]) != self.SYSEX_HEADER
-        ):
+        if len(data) < len(self.SYSEX_HEADER) + minimum_data_length or list(data[:7]) != self.SYSEX_HEADER:
             # ignore invalid header
             return
 
@@ -139,9 +132,7 @@ class Decoder(Protocol):
             to_channel_identifier = self._decode_channel_identifier(d[3], d[4])
 
             # (!) send level
-            self.send_level_changed_event(
-                identifier, to_channel_identifier, Level(d[5])
-            )
+            self.send_level_changed_event(identifier, to_channel_identifier, Level(d[5]))
 
     def _decode_channel_identifier(self, n: int, ch: int) -> ChannelIdentifier:
         return ChannelIdentifier.from_raw_data(n - self._bank_offset, ch)
@@ -280,9 +271,7 @@ class Encoder(Protocol):
         self.dispatch(data)
         return data
 
-    def send_level(
-        self, from_channel: InputChannel, to_channel: OutputChannel, level: Level
-    ) -> list:
+    def send_level(self, from_channel: InputChannel, to_channel: OutputChannel, level: Level) -> list:
         data = [
             0xF0,
             *self.SYSEX_HEADER,
@@ -298,9 +287,7 @@ class Encoder(Protocol):
         self.dispatch(data)
         return data
 
-    def request_send_level(
-        self, from_channel: InputChannel, to_channel: OutputChannel
-    ) -> list:
+    def request_send_level(self, from_channel: InputChannel, to_channel: OutputChannel) -> list:
         data = [
             0xF0,
             *self.SYSEX_HEADER,

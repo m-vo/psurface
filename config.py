@@ -16,9 +16,7 @@ class Config:
 
     @property
     def auth_string(self):
-        return (
-            self._data["dlive"]["user_profile"] + self._data["_dlive"]["user_password"]
-        )
+        return self._data["dlive"]["user_profile"] + self._data["_dlive"]["user_password"]
 
     @property
     def midi_out_port_name(self):

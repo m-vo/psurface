@@ -20,9 +20,7 @@ class PSurface:
         self._session = Session(self._decoder, self._encoder)
 
         self._layer_controller = LayerController(self._session)
-        self._ui = DeckUI(
-            config.streamdeck_devices, self._session, self._layer_controller
-        )
+        self._ui = DeckUI(config.streamdeck_devices, self._session, self._layer_controller)
 
     def run(self):
         self._encoder.dispatch.append(self._dlive_in.send_bytes)
