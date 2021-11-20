@@ -1,29 +1,24 @@
 from collections import deque
+from threading import Lock
 from typing import Deque
 
-from common.event import Event
-from mido.messages.messages import SysexData, Message
+from mido.messages.messages import Message, SysexData
 
-from dlive.entity import (
-    Channel,
-    Level,
-    Color,
-    ChannelIdentifier,
-    InputChannel,
-    OutputChannel,
-)
+from app import App
+from common.event import Event
+from dlive.entity import Channel, ChannelIdentifier, Color, InputChannel, Level, OutputChannel
 
 
 class Protocol:
     SYSEX_HEADER = [0x00, 0x00, 0x1A, 0x50, 0x10, 0x01, 0x00]
 
-    def __init__(self, midi_bank_offset: int):
-        self._bank_offset = midi_bank_offset
+    def __init__(self):
+        self._bank_offset = App.config.midi_bank_offset
 
 
 class Decoder(Protocol):
-    def __init__(self, midi_bank_offset: int):
-        Protocol.__init__(self, midi_bank_offset)
+    def __init__(self):
+        Protocol.__init__(self)
 
         self._messages: Deque[Message] = deque()
         self._max_window = 3
@@ -139,10 +134,12 @@ class Decoder(Protocol):
 
 
 class Encoder(Protocol):
-    def __init__(self, midi_bank_offset: int):
-        Protocol.__init__(self, midi_bank_offset)
+    def __init__(self):
+        Protocol.__init__(self)
 
         self.dispatch: Event = Event()  # data: list
+        self._write_lock = Lock()
+        self._debug_active = False
 
     def recall_scene(self, scene: int) -> list:
         if scene < 0 or scene > 499:

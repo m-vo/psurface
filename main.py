@@ -1,52 +1,50 @@
 import sys
 
-from common.session import Session, VirtualChannel, LayerController
-from config import Config
+from app import App
 from dlive.connection import DLiveSocketPort
-from dlive.encoding import Encoder, Decoder
+from dlive.encoding import Decoder, Encoder
+from state.layers import LayerController
+from state.session import Session
 from streamdeck.ui import DeckUI
 
 
 class PSurface:
-    def __init__(self, config: Config):
+    def __init__(self):
+        def print_status() -> None:
+            print(App.settings.status)
+
+        App.settings.status_changed_event.append(print_status)
+
+        # Internal state
+        self._encoder = Encoder()
+        self._decoder = Decoder()
+        self._session = Session(self._decoder, self._encoder)
+        self._layer_controller = LayerController(self._session)
+
+        # Connect to decks
+        App.settings.set_status("Finding decks…")
+        self._ui = DeckUI(self._session, self._layer_controller)
+
         # We're using separate connections so that we can monitor our own
         # commands. The mix rack would for instance not respond with a program
         # change message on the connection where a scene recall was issued
-        self._dlive_out = DLiveSocketPort(config)
-        self._dlive_in = DLiveSocketPort(config)
-
-        self._encoder = Encoder(config.midi_bank_offset)
-        self._decoder = Decoder(config.midi_bank_offset)
-        self._session = Session(self._decoder, self._encoder)
-
-        self._layer_controller = LayerController(self._session)
-        self._ui = DeckUI(config.streamdeck_devices, self._session, self._layer_controller)
+        App.settings.set_status("Connecting to mixrack…")
+        self._dlive_out = DLiveSocketPort()
+        self._dlive_in = DLiveSocketPort()
 
     def run(self):
         self._encoder.dispatch.append(self._dlive_in.send_bytes)
         self._session.track_changes()
 
-        self._ui.init()
-
-        # th = threading.Thread(target=self.threaded)
-        # th.start()
+        # wait some time until the internal state has settled before initializing event bound ui
+        App.scheduler.execute_delayed("run_ui", 1, self._ui.init)
 
         for message in self._dlive_out:
             self._decoder.feed_message(message)
 
-    # def threaded(self):
-    #     time.sleep(1)
-    #     print("creating vch")
-    #     vch = VirtualChannel(ChannelIdentifier(Bank.BANK_MONO_AUX, 8), self._decoder, self._encoder)
-    #     vch.init()
-    #
-    #     time.sleep(10)
-    #     print("binding vch")
-    #     vch.bind_send(self._session.input_channels[0], self._session.aux_channels[0])
-
 
 def main():
-    PSurface(Config("config.yaml")).run()
+    PSurface().run()
 
 
 if __name__ == "__main__":
@@ -55,6 +53,7 @@ if __name__ == "__main__":
 
     while True:
         try:
+            # todo: restart process instead
             main()
         except:
             # ignore + restart

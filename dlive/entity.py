@@ -2,6 +2,7 @@ import re
 import typing
 from copy import copy
 from enum import Enum
+from threading import Lock
 
 from common.event import Event
 
@@ -41,7 +42,7 @@ class Color(Enum):
         self._rgb_ = rgb
 
     def __str__(self):
-        return self.value
+        return self.name
 
     @property
     def rgb(self):
@@ -55,11 +56,12 @@ class Level(int):
     """
 
     VALUE_FULL = 0x7F
-    VALUE_ZERO = 0x00
+    VALUE_0DB = 0x6B
+    VALUE_OFF = 0x00
     VALUE_FADER_MIDPOINT = 0x58
 
     def __new__(cls, value: int = 0):
-        return int.__new__(cls, max(min(Level.VALUE_FULL, value), Level.VALUE_ZERO))
+        return int.__new__(cls, max(min(Level.VALUE_FULL, value), Level.VALUE_OFF))
 
     def __str__(self) -> str:
         value = int(self)
@@ -160,6 +162,16 @@ class ChannelIdentifier:
     def midi_channel_index(self) -> int:
         return self._CHANNEL_OFFSET_BY_BANK[self._bank] + self._canonical_index
 
+    @property
+    def is_mono_feed(self) -> typing.Optional[bool]:
+        if self._bank in [Bank.MONO_GROUP, Bank.MONO_AUX, Bank.MONO_MATRIX, Bank.MONO_FX_SEND]:
+            return True
+
+        if self._bank in [Bank.STEREO_GROUP, Bank.STEREO_AUX, Bank.STEREO_MATRIX, Bank.STEREO_FX_SEND]:
+            return False
+
+        return None
+
     @classmethod
     def from_raw_data(cls, bank_offset: int, channel_offset: int) -> "ChannelIdentifier":
         if bank_offset not in ChannelIdentifier._BANK_MAP:
@@ -174,7 +186,7 @@ class ChannelIdentifier:
 
     def __str__(self):
         return "{}#{} {{ N_base={}, CH={} }}".format(
-            self.bank.name[5:],
+            self.bank.name,
             self.canonical_index,
             self.midi_bank_offset,
             self.midi_channel_index,
@@ -209,6 +221,15 @@ class Channel:
         self.mute_changed_event: Event = Event()
         self.level_changed_event: Event = Event()
         self.select_changed_event: Event = Event()
+
+        # Lock
+        self._update_lock = Lock()
+
+    def __enter__(self) -> None:
+        self._update_lock.acquire()
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self._update_lock.release()
 
     @property
     def identifier(self):
@@ -302,9 +323,9 @@ class Channel:
         return True
 
     def __str__(self):
-        return "Channel '{}' {}".format(
-            self._label,
+        return 'Channel {} "{}"'.format(
             self._identifier,
+            self._label,
         )
 
     def __eq__(self, other: "Channel"):
@@ -381,6 +402,10 @@ class InputChannel(Channel):
     @property
     def affected_by_s_dca(self) -> bool:
         return self._affected_by_s_dca
+
+
+class MultiChannel(InputChannel, OutputChannel):
+    pass
 
 
 class VirtualChannel(OutputChannel):
@@ -474,7 +499,7 @@ class VirtualChannel(OutputChannel):
 
         for channel, base_level in self._affected_s_dca_channels:
             # todo: Consider moving value logic to Level entity
-            reference = (Level.VALUE_ZERO, Level.VALUE_FULL)[level > Level.VALUE_FADER_MIDPOINT]
+            reference = (Level.VALUE_OFF, Level.VALUE_FULL)[level > Level.VALUE_FADER_MIDPOINT]
             diff = (
                 (reference - base_level)
                 * (level - Level.VALUE_FADER_MIDPOINT)

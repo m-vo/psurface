@@ -19,18 +19,31 @@ streamdeck:
       output: 'CL15K1A02084'
 
 control:
-  aux:
-    # define which scene to call when selecting the first aux channel
-    # the subsequent aux channel will use the subsequent scene index and so on
-    scene_start: 401
+  tracking:
+    # number of inputs/aux busses/fx returns to track
+    number_of_inputs: 96
+    number_of_mono_aux: 8
+    number_of_stereo_aux: 8
+    number_of_mono_fx: 10
+    number_of_stereo_fx: 0
 
-    # number of aux channels/scenes to map
-    amount: 8
+    # first of 16 virtual input channels
+    virtual_start: 101
 
-midi:
-  out:
-    port_name: 'dLive Proxy Feedback'
-    channel: 1
+    # feedback matrix channel
+    feedback_matrix: 1
 
-  in:
-    port_name: 'dLive Proxy Control'
+  scenes:
+    # mixing bank 1..6
+    mixing_start: 451
+
+    # virtual channel banks 1..6 left and (single one) right
+    outputs_left_start: 461
+    outputs_right: 467
+
+    # sends on fader/s-dca
+    sends: 468
+
+    # custom scenes
+    custom_aux: 471
+    custom_fx: 472

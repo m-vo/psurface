@@ -14,9 +14,14 @@ mido = {editable = true, ref = "dlive-fixes", git = "https://github.com/m-vo/mid
 
 [dev-packages]
 black = "*"
+isort = "*"
 
 [requires]
 python_version = "3.8"
 
 [pipenv]
 allow_prereleases = true
+
+[scripts]
+cs = "bash ./cs.sh"
+tests = "python -m unittest discover ./test"

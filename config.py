@@ -1,3 +1,5 @@
+from typing import Optional
+
 import yaml
 
 
@@ -7,45 +9,68 @@ class Config:
             self._data = yaml.safe_load(stream)
 
     @property
-    def dlive_ip(self):
+    def dlive_ip(self) -> str:
         return self._data["dlive"]["ip"]
 
     @property
-    def use_auth(self):
-        return bool(self._data["dlive"]["use_auth"])
+    def auth(self) -> Optional[str]:
+        # self._data["dlive"]["user_profile"] + self._data["_dlive"]["user_password"]
+        return None
 
     @property
-    def auth_string(self):
-        return self._data["dlive"]["user_profile"] + self._data["_dlive"]["user_password"]
-
-    @property
-    def midi_out_port_name(self):
-        return self._data["midi"]["out"]["port_name"]
-
-    @property
-    def midi_in_port_name(self):
-        return self._data["midi"]["in"]["port_name"]
-
-    @property
-    def midi_bank_offset(self):
+    def midi_bank_offset(self) -> int:
         # use zero based offset internally
-        return self._data["dlive"]["midi_bank_offset"] - 1
+        return int(self._data["dlive"]["midi_bank_offset"] - 1)
 
     @property
-    def outbound_midi_channel(self):
+    def streamdeck_devices(self) -> dict:
+        data = self._data["streamdeck"]["devices"]
+        self._enforce_keys(data, ["system", "input", "output"], "streamdeck.devices")
+
+        return data
+
+    @property
+    def control_tracking(self) -> dict:
+        data = self._data["control"]["tracking"]
+        self._enforce_keys(
+            data,
+            [
+                "number_of_inputs",
+                "number_of_mono_aux",
+                "number_of_stereo_aux",
+                "number_of_mono_fx",
+                "number_of_stereo_fx",
+                "virtual_start",
+                "feedback_matrix",
+            ],
+            "control.tracking",
+        )
+
         # use zero based offset internally
-        return self._data["midi"]["out"]["channel"] - 1
+        for key in ["virtual_start", "feedback_matrix"]:
+            data[key] -= 1
+
+        return data
 
     @property
-    def control_aux_scene_start(self):
+    def control_scenes(self) -> dict:
+        data = self._data["control"]["scenes"]
+        self._enforce_keys(
+            data,
+            ["mixing_start", "outputs_left_start", "outputs_right", "sends", "custom_aux", "custom_fx"],
+            "control.scenes",
+        )
+
         # use zero based offset internally
-        return self._data["control"]["aux"]["scene_start"] - 1
+        for key in data:
+            data[key] -= 1
 
-    @property
-    def control_aux_amount(self):
-        # use zero based offset internally
-        return self._data["control"]["aux"]["amount"]
+        return data
 
-    @property
-    def streamdeck_devices(self):
-        return self._data["streamdeck"]["devices"]
+    @staticmethod
+    def _enforce_keys(data: dict, keys: list, group: str) -> None:
+        for key in keys:
+            if key not in data:
+                raise RuntimeError(f"Invalid config - missing config key: '{key}' in '{group}'")
+
+        pass
