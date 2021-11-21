@@ -2,8 +2,9 @@ import re
 import typing
 from copy import copy
 from enum import Enum
-from threading import Lock
+from threading import Lock, Thread
 
+from app import App
 from common.event import Event
 
 
@@ -184,6 +185,9 @@ class ChannelIdentifier:
 
         raise IndexError("Invalid channel offset")
 
+    def short_label(self) -> str:
+        return "{} {}".format(self.bank.short_name, self.canonical_index + 1)
+
     def __str__(self):
         return "{}#{} {{ N_base={}, CH={} }}".format(
             self.bank.name,
@@ -224,12 +228,6 @@ class Channel:
 
         # Lock
         self._update_lock = Lock()
-
-    def __enter__(self) -> None:
-        self._update_lock.acquire()
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self._update_lock.release()
 
     @property
     def identifier(self):
@@ -340,21 +338,40 @@ class OutputChannel(Channel):
 
 
 class InputChannel(Channel):
-    def __init__(self, identifier: ChannelIdentifier):
+    def __init__(self, identifier: ChannelIdentifier, hydrate_sends_callback: typing.Optional[typing.Callable] = None):
         super(InputChannel, self).__init__(identifier)
 
         self._sends: typing.Dict[int, typing.Tuple[Level, OutputChannel]] = {}
         self._sends_snapshot: typing.Dict[int, typing.Tuple[Level, OutputChannel]] = {}
-        self._affected_by_s_dca = False
+        self._affected_by_s_dca: typing.Set[int] = set()
 
         self.send_level_changed_event: Event = Event()
         self.s_dca_changed_event: Event = Event()
+
+        self._hydrate_sends_lock = Lock()
+        self._sends_hydrated: bool = False
+        self._hydrate_sends_callback: typing.Callable = hydrate_sends_callback
 
     @property
     def send_channels(self) -> typing.List[OutputChannel]:
         return list(map(lambda t: t[1], self._sends.values()))
 
+    def hydrate_sends(self) -> bool:
+        if not self._hydrate_sends_lock.acquire(timeout=1.0):
+            return False
+
+        if not self._sends_hydrated and self._hydrate_sends_callback:
+            self._hydrate_sends_callback(self)
+            self._sends_hydrated = True
+            print(f"Hydrated sends of {self.identifier.short_label()}")
+
+        now_hydrated = self._sends_hydrated
+        self._hydrate_sends_lock.release()
+
+        return now_hydrated
+
     def get_send_level(self, to_channel: OutputChannel) -> typing.Optional[Level]:
+        self.hydrate_sends()
         hash_index = to_channel.identifier.__hash__()
 
         if hash_index not in self._sends:
@@ -382,26 +399,48 @@ class InputChannel(Channel):
 
     def backup_sends(self) -> None:
         """Create snapshot of the current send levels."""
-        self._sends_snapshot = copy(self._sends)
+        with self._hydrate_sends_lock:
+            if self._sends_hydrated:
+                self._sends_snapshot = copy(self._sends)
 
     def restore_sends(self) -> None:
         """Restore send levels from the snapshot and clear 'affected by s_dca' state."""
-        self._sends = self._sends_snapshot
+        if len(self._sends_snapshot) == 0:
+            App.settings.set_status(f"Restore fail | {self.identifier.short_label()}")
+            return
+
+        for hash_index, level_output in self._sends_snapshot.items():
+            level, to_channel = level_output
+
+            if (
+                hash_index in self._sends
+                and to_channel.identifier.__hash__() in self._affected_by_s_dca
+                and self._sends[hash_index][0] != level
+            ):
+                self._sends[hash_index] = (level, to_channel)
+                self.send_level_changed_event(self, to_channel, level)
+
+        self._affected_by_s_dca.clear()
+        self.s_dca_changed_event(self)
+
+    def drop_sends_backup(self) -> None:
+        """Accept current send levels and drop the snapshot."""
         self._sends_snapshot = {}
-        self._affected_by_s_dca = False
-
-        for level, to_channel in self._sends.values():
-            self.send_level_changed_event(self, to_channel, level)
+        self._affected_by_s_dca.clear()
 
         self.s_dca_changed_event(self)
 
-    def mark_affected_by_s_dca(self) -> None:
-        self._affected_by_s_dca = True
-        self.s_dca_changed_event(self)
+    def mark_affected_by_s_dca(self, with_channel: OutputChannel) -> None:
+        hash_identifier = with_channel.identifier.__hash__()
+        promote_change = hash_identifier not in self._affected_by_s_dca
+        self._affected_by_s_dca.add(hash_identifier)
+
+        if promote_change:
+            self.s_dca_changed_event(self)
 
     @property
     def affected_by_s_dca(self) -> bool:
-        return self._affected_by_s_dca
+        return len(self._affected_by_s_dca) > 0
 
 
 class MultiChannel(InputChannel, OutputChannel):
@@ -416,8 +455,9 @@ class VirtualChannel(OutputChannel):
 
     _MODE_NONE = -1
     _MODE_TIE_TO_ZERO = 0
-    _MODE_TRACK_LEVEL = 1
-    _MODE_DCA = 2
+    _MODE_TRACK_SEND_LEVEL = 1
+    _MODE_TRACK_MASTER_LEVEL = 2
+    _MODE_SEND_DCA = 3
 
     def __init__(self, identifier: ChannelIdentifier):
         super(VirtualChannel, self).__init__(identifier)
@@ -426,57 +466,119 @@ class VirtualChannel(OutputChannel):
         self._channel_send: typing.Optional[OutputChannel] = None
         self._affected_s_dca_channels: typing.List[typing.Tuple[InputChannel, Level]] = []
 
-        self._read_send_level_once = False
         self._mode = self._MODE_NONE
 
-    def bind_send(self, base_channel: InputChannel, to_channel: OutputChannel) -> None:
+    def bind_send(self, base_channel: InputChannel, to_channel: OutputChannel, inverse: bool = False) -> bool:
         """Track the send level to a given output of a given base channel."""
-        self._channel_base = base_channel
-        self._channel_send = to_channel
-        self._mode = self._MODE_TRACK_LEVEL
+        level = base_channel.get_send_level(to_channel)
 
-        # set label and color from send channel
-        self.set_label(f">{to_channel.label}")
-        self.set_color(to_channel.color)
+        # reject if send levels are not settled
+        if level is None:
+            App.settings.set_status("Not synced | Try again")
+            print(f"Send levels of {base_channel.identifier.short_label()} are not fully settled, yet.")
+
+            return False
+
+        with self._update_lock:
+            self._mode = self._MODE_TRACK_SEND_LEVEL
+            self._channel_base = base_channel
+            self._channel_send = to_channel
+            self._affected_s_dca_channels = []
+
+        # set label and color from target/base channel
+        if not inverse:
+            self.set_label(f">{to_channel.label}")
+            self.set_color(to_channel.color)
+        else:
+            self.set_label(f"@{base_channel.label}")
+            self.set_color(base_channel.color)
 
         # initialize fader level
-        self.set_level(base_channel.get_send_level(to_channel))
+        self.set_level(level)
+        self.set_mute(False)
 
-    def bind_s_dca(self, base_channels: typing.List[InputChannel], to_channel: OutputChannel) -> None:
+        return True
+
+    def bind_s_dca(self, base_channels: typing.List[InputChannel], to_channel: OutputChannel) -> bool:
         """Simultaneously track a send level to a given output on multiple base channels."""
-        self._affected_s_dca_channels = list(
+        affected_s_dca_channels = list(
             zip(
                 base_channels,
                 map(lambda c: c.get_send_level(to_channel), base_channels),
             )
         )
-        self._channel_send = to_channel
-        self._mode = self._MODE_DCA
+
+        # reject if any send levels are not settled
+        if None in list(map(lambda x: x[1], self._affected_s_dca_channels)):
+            App.settings.set_status("Not synced | Try again")
+            print(f"Send levels to {to_channel.identifier.short_label()} are not fully settled, yet.")
+
+            return False
+
+        with self._update_lock:
+            self._mode = self._MODE_SEND_DCA
+            self._channel_base = None
+            self._channel_send = to_channel
+            self._affected_s_dca_channels = affected_s_dca_channels
+
+            # backup sends
+            for channel in base_channels:
+                if not channel.affected_by_s_dca:
+                    channel.backup_sends()
 
         # set label and color from send channel
         self.set_label(f"={to_channel.label}")
         self.set_color(to_channel.color)
+        self.set_mute(False)
 
         # initialize fader level at midpoint
         self.set_level(Level(Level.VALUE_FADER_MIDPOINT))
 
-    def tie_to_zero(self):
-        """Make the fader stick to the -inf/bottom position."""
-        self.reset()
-        self._mode = self._MODE_TIE_TO_ZERO
-        self.set_level(Level(0))
+        return True
 
-    def reset(self) -> None:
-        """Reset and unbind this virtual channel."""
-        self._channel_base = None
-        self._channel_send = None
-        self._affected_s_dca_channels = None
-        self._read_send_level_once = False
-        self._mode = self._MODE_NONE
+    def bind_master(self, base_channel: OutputChannel) -> None:
+        """Copy the base channel"""
+        with self._update_lock:
+            self._mode = self._MODE_TRACK_MASTER_LEVEL
+            self._channel_base = base_channel
+            self._channel_send = None
+            self._affected_s_dca_channels = []
+
+        # set label and color from base channel
+        self.set_label(f"M {base_channel.label}")
+        self.set_color(base_channel.color)
+
+        # initialize fader + mute
+        self.set_level(base_channel.level)
+        self.set_mute(base_channel.mute)
+
+    def tie_to_zero(self) -> None:
+        """Make the fader stick to the -inf/bottom position."""
+        with self._update_lock:
+            self._mode = self._MODE_TIE_TO_ZERO
+            self._channel_base = None
+            self._channel_send = None
+            self._affected_s_dca_channels = []
 
         self.set_label("")
         self.set_color(Color.OFF)
         self.set_mute(False)
+
+        self.set_level(Level(0))
+
+    def unbind(self) -> None:
+        """Reset and unbind this virtual channel."""
+        with self._update_lock:
+            self._mode = self._MODE_NONE
+            self._channel_base = None
+            self._channel_send = None
+            self._affected_s_dca_channels = []
+
+        self.set_label("[V-Ch]")
+        self.set_color(Color.OFF)
+        self.set_mute(True)
+
+        self.set_level(Level(0))
 
     def set_level(self, level: Level, trigger_change_event: bool = True) -> bool:
         track_level_change = super(VirtualChannel, self).set_level(level, trigger_change_event)
@@ -486,25 +588,52 @@ class VirtualChannel(OutputChannel):
             if self._mode == self._MODE_TIE_TO_ZERO:
                 if level > 0:
                     self.set_level(Level(0))
-            elif self._mode == self._MODE_TRACK_LEVEL and self._channel_base and self._channel_send:
-                self._channel_base.set_send_level(self._channel_send, level)
-            elif self._mode == self._MODE_DCA and self._channel_send:
+            elif self._mode == self._MODE_SEND_DCA and self._channel_send:
                 self._apply_s_dca_values(level)
+            elif self._mode == self._MODE_TRACK_SEND_LEVEL and self._channel_base and self._channel_send:
+                self._channel_base.set_send_level(self._channel_send, level)
+            elif self._mode == self._MODE_TRACK_MASTER_LEVEL and self._channel_base:
+                self._channel_base.set_level(level)
 
         return track_level_change
+
+    def set_mute(self, enabled: bool, trigger_change_event: bool = True) -> bool:
+        track_mute_change = super().set_mute(enabled, trigger_change_event)
+
+        # Handle modes
+        if track_mute_change:
+            if self._mode in [self._MODE_TRACK_SEND_LEVEL, self._MODE_SEND_DCA, self._MODE_TIE_TO_ZERO]:
+                if enabled:
+                    self.set_mute(False)
+            elif self._mode == self._MODE_NONE:
+                if not enabled:
+                    self.set_mute(True)
+            elif self._mode == self._MODE_TRACK_MASTER_LEVEL and self._channel_base:
+                self._channel_base.set_mute(enabled)
+
+        return track_mute_change
 
     def _apply_s_dca_values(self, level: Level) -> None:
         if level == Level(Level.VALUE_FADER_MIDPOINT):
             return
 
         for channel, base_level in self._affected_s_dca_channels:
-            # todo: Consider moving value logic to Level entity
-            reference = (Level.VALUE_OFF, Level.VALUE_FULL)[level > Level.VALUE_FADER_MIDPOINT]
-            diff = (
-                (reference - base_level)
-                * (level - Level.VALUE_FADER_MIDPOINT)
-                / (reference - Level.VALUE_FADER_MIDPOINT)
-            )
+            try:
+                # sanity check against race conditions
+                # todo: Consider moving value logic to Level entity
+                reference = (Level.VALUE_OFF, Level.VALUE_FULL)[level > Level.VALUE_FADER_MIDPOINT]
+                diff = (
+                    (reference - base_level)
+                    * (level - Level.VALUE_FADER_MIDPOINT)
+                    / (reference - Level.VALUE_FADER_MIDPOINT)
+                )
 
-            channel.mark_affected_by_s_dca()
-            channel.set_send_level(self._channel_send, Level(base_level + int(diff)))
+                # set level changes from new thread, so there is no waiting induced
+                level = Level(base_level + int(diff))
+                Thread(target=channel.set_send_level, args=[self._channel_send, level]).start()
+
+                channel.mark_affected_by_s_dca(self._channel_send)
+
+            except AttributeError:
+                # protect against race conditions
+                pass

@@ -1,7 +1,6 @@
 from StreamDeck.DeviceManager import DeviceManager
 
 from app import App
-from common.event import Event
 from state.layers import LayerController
 from state.session import Session
 from streamdeck.surface.input import InputSurface
@@ -64,5 +63,5 @@ class DeckUI:
         for surface in all_surfaces:
             surface.init()
 
-        self._layer_controller.select_default()
+        self._layer_controller.select_mixing()
         App.settings.set_default_brightness()

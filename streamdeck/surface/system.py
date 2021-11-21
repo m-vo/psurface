@@ -11,11 +11,13 @@ from streamdeck.surface.surface import Surface
 
 
 class SystemSurface(Surface):
-    KEY_BRIGHTNESS = 14
-    KEY_INPUTS = 0
-    KEY_S_DCA = 5
-    KEY_DIRECT_ACTION = 4
-    KEY_STATUS = 12
+    KEY_BRIGHTNESS = 4
+    KEY_S_DCA = 0
+    KEY_S_DCA_RESTORE = 1
+    KEY_S_DCA_ACCEPT = 2
+    KEY_STATUS = 9
+    KEY_DIRECT_ACTION = 13
+    KEY_HOME = 14
 
     def __init__(
         self,
@@ -28,6 +30,8 @@ class SystemSurface(Surface):
         self._assets["icon_brightness"] = os.path.join(self._assets_path, "brightness.png")
         self._assets["icon_direct"] = os.path.join(self._assets_path, "direct.png")
         self._assets["icon_left"] = os.path.join(self._assets_path, "left.png")
+        self._assets["icon_back"] = os.path.join(self._assets_path, "back.png")
+        self._assets["icon_check"] = os.path.join(self._assets_path, "check.png")
 
         # listen to and display status updates
         def update_status() -> None:
@@ -39,16 +43,20 @@ class SystemSurface(Surface):
     def init(self):
         super(SystemSurface, self).init()
 
-        self._layer_controller.selection_update_event.append(self._on_select_change)
+        def setup_selects() -> None:
+            self._set_image(self.KEY_S_DCA, self._render_s_dca_button())
+            self._set_image(self.KEY_S_DCA + 1, self._render_s_dca_restore_button())
+            self._set_image(self.KEY_S_DCA + 2, self._render_s_dca_accept_button())
+
+        self._layer_controller.selection_update_event.append(setup_selects)
+        setup_selects()
 
         self._update_brightness()
         self._update_direct_action()
 
-    def _on_select_change(self):
-        self._set_image(self.KEY_INPUTS, self._render_inputs_button())
-        self._set_image(self.KEY_S_DCA, self._render_s_dca_button())
+    def _on_key_down(self, key: int) -> None:
+        super()._on_key_down(key)
 
-    def _on_key_down(self, key: int):
         if key == self.KEY_BRIGHTNESS:
             App.settings.increase_brightness()
             return
@@ -57,29 +65,33 @@ class SystemSurface(Surface):
             App.settings.toggle_direct_action()
             self._update_direct_action()
 
-    def _on_key_up(self, key: int):
-        if key == self.KEY_INPUTS:
-            self._layer_controller.select_default()
-            return
+    def _on_key_up(self, key: int) -> None:
+        super()._on_key_up(key)
 
         if key == self.KEY_S_DCA:
-            self._layer_controller.toggle_s_dca_mode()
-
-    def _on_key_down_long(self, key: int):
-        if key == self.KEY_S_DCA:
-            self._layer_controller.clear_s_dca()
+            self._layer_controller.enable_s_dca_mode()
             return
 
-        # ignore direct action for other system keys
+        if key == self.KEY_S_DCA_RESTORE:
+            self._layer_controller.restore_s_dca_values()
+            return
+
+        if key == self.KEY_S_DCA_ACCEPT:
+            self._layer_controller.accept_s_dca_values()
+
+    def _on_key_down_long(self, key: int) -> None:
+        super()._on_key_down_long(key)
+
+        # ignore direct action for system keys
         self._on_key_down(key)
         self._on_key_up(key)
 
-    def _update_brightness(self):
+    def _update_brightness(self) -> None:
         super(SystemSurface, self)._update_brightness()
 
         self._set_image(self.KEY_BRIGHTNESS, self._render_brightness_indicator())
 
-    def _update_direct_action(self):
+    def _update_direct_action(self) -> None:
         self._set_image(self.KEY_DIRECT_ACTION, self._render_direct_action_button())
 
     def _render_brightness_indicator(self) -> Image:
@@ -123,7 +135,7 @@ class SystemSurface(Surface):
         return image
 
     def _render_inputs_button(self) -> Image:
-        selected = self._layer_controller.default_selected
+        selected = self._layer_controller.mixing_selected
 
         image = Image.new(
             "RGB",
@@ -144,25 +156,78 @@ class SystemSurface(Surface):
         return image
 
     def _render_s_dca_button(self) -> Image:
-        active = self._layer_controller.s_dca_active
+        selected = self._layer_controller.s_dca_selected
+        active = self._layer_controller.s_dca_affected_channels > 0
 
         image = Image.new(
             "RGB",
             self._deck.key_image_format()["size"],
-            ("black", (240, 240, 240))[self._layer_controller.s_dca_selected],
+            ("black", (240, 240, 240))[selected],
         )
 
         draw = ImageDraw.Draw(image)
 
-        self._render_component_s_dca_badge(draw, (7, 10), active)
+        if selected or active:
+            draw.line((0, 7, 64, 7), fill=(100, 100, 100), width=1)
+            draw.line((0, 58, 64, 58), fill=(100, 100, 100), width=1)
+
+        self._render_component_s_dca_badge(draw, (7, 24), selected)
+
+        return image
+
+    def _render_s_dca_restore_button(self) -> Image:
+        selected = self._layer_controller.s_dca_selected
+        active = self._layer_controller.s_dca_affected_channels > 0
+
+        if not selected and not active:
+            return self._render_blank()
+        else:
+            image = PILHelper.create_scaled_image(
+                self._deck,
+                Image.open(self._assets["icon_back"]),
+                margins=[18, 20, 20, 15],
+            )
+
+        background_color = ("black", (40, 40, 40))[selected]
+        active_values_color = ((100, 100, 100), "red")[active]
+        image = ImageOps.colorize(image.convert("L"), black=background_color, white=active_values_color)
+        draw = ImageDraw.Draw(image)
+
+        draw.line((0, 7, 64, 7), fill=(100, 100, 100), width=1)
+        draw.line((0, 58, 64, 58), fill=(100, 100, 100), width=1)
+
+        return image
+
+    def _render_s_dca_accept_button(self) -> Image:
+        selected = self._layer_controller.s_dca_selected
+        affected_channels = self._layer_controller.s_dca_affected_channels
+        active = affected_channels > 0
+
+        if not selected and not active:
+            return self._render_blank()
+        else:
+            image = PILHelper.create_scaled_image(
+                self._deck,
+                Image.open(self._assets["icon_check"]),
+                margins=[17, 20, 18, 15],
+            )
+
+        background_color = ("black", (40, 40, 40))[selected]
+        active_values_color = ((100, 100, 100), "green")[active]
+        image = ImageOps.colorize(image.convert("L"), black=background_color, white=active_values_color)
+        draw = ImageDraw.Draw(image)
 
         if active:
             draw.text(
-                (12, 34),
-                text="hold to\nrestore",
+                (41, 41),
+                text=f"{affected_channels}",
                 font=ImageFont.truetype(self._assets["font"], 14),
-                fill=((255, 255, 255), (50, 50, 50))[active],
+                anchor="lt",
+                fill=active_values_color,
             )
+
+        draw.line((0, 7, 64, 7), fill=(100, 100, 100), width=1)
+        draw.line((0, 58, 64, 58), fill=(100, 100, 100), width=1)
 
         return image
 
@@ -171,11 +236,12 @@ class SystemSurface(Surface):
 
         draw = ImageDraw.Draw(image)
 
+        text = App.settings.status.replace(" | ", "\n")
+
         draw.text(
-            (5, 10),
-            text=App.settings.status,
-            font=ImageFont.truetype(self._assets["font"], 10),
-            anchor="lt",
+            (4, 10),
+            text=text,
+            font=ImageFont.truetype(self._assets["font"], 9),
             fill=(200, 200, 200),
         )
 

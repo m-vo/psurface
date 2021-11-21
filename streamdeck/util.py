@@ -73,7 +73,7 @@ class ChannelPacking:
                     pack_map[index] = channel
                     index += 1
 
-                if leave_space and index % 8 != 0:
+                if leave_space and length > 0 and index % 8 != 0:
                     index += 1
 
             return pack_map

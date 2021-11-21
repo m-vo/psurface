@@ -1,7 +1,8 @@
 import os
+from abc import ABC
 from typing import Tuple
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 from PIL.ImageDraw import Draw
 from StreamDeck.Devices import StreamDeck
 from StreamDeck.Devices.StreamDeckXL import StreamDeckXL
@@ -14,7 +15,9 @@ from state.session import Session
 from streamdeck.util import FragmentRenderer
 
 
-class Surface:
+class Surface(ABC):
+    KEY_HOME: int
+
     def __init__(
         self,
         device: StreamDeck,
@@ -33,14 +36,17 @@ class Surface:
         self._assets_path = os.path.join(os.path.dirname(__file__), "../../assets")
         self._assets = {
             "font": os.path.join(self._assets_path, "Roboto-Regular.ttf"),
+            "icon_home": os.path.join(self._assets_path, "home.png"),
         }
 
     def __del__(self):
         self._deck.close()
 
     def init(self):
+        # handle brightness update
         App.settings.brightness_changed_event.append(self._update_brightness)
 
+        # handle key presses
         def key_change(_, key: int, state: bool) -> None:
             if state:
                 if App.settings.direct_action:
@@ -61,19 +67,26 @@ class Surface:
                 self._on_key_up(key)
 
         self._deck.set_key_callback(key_change)
-        self._session.channel_update_event.append(self._on_channel_update)
+
+        # handle external channel updates
+        self._session.channel_update_event.append(self._fragment_renderer.update)
+
+        # add home button
+        def render_home_button() -> None:
+            self._set_image(self.KEY_HOME, self._render_home_button())
+
+        self._layer_controller.selection_update_event.append(render_home_button)
+        render_home_button()
 
     def _on_key_down(self, key: int):
         pass
 
     def _on_key_up(self, key: int):
-        pass
+        if key == self.KEY_HOME:
+            self._layer_controller.select_mixing()
 
     def _on_key_down_long(self, key: int):
         pass
-
-    def _on_channel_update(self, channel: Channel):
-        self._fragment_renderer.update(channel)
 
     def _update_brightness(self):
         streamdeck_original_map = {0: 20, 1: 29, 2: 43, 3: 50, 4: 60}
@@ -166,6 +179,24 @@ class Surface:
             stroke="black",
         )
 
+    def _render_custom_select(self, label: str, selected: bool) -> Image:
+        image = Image.new(
+            "RGB",
+            self._deck.key_image_format()["size"],
+            ("black", (240, 240, 240))[selected],
+        )
+
+        draw = ImageDraw.Draw(image)
+        draw.text(
+            (image.width / 2, image.height / 2),
+            text=label,
+            font=ImageFont.truetype(self._assets["font"], 25),
+            anchor="mm",
+            fill=((240, 240, 240), (50, 50, 50))[selected],
+        )
+
+        return image
+
     def _render_channel(self, channel: Channel):
         image = Image.new(
             "RGB",
@@ -198,6 +229,26 @@ class Surface:
             anchor="lb",
             fill=((100, 100, 100), (50, 50, 50))[channel.selected],
         )
+
+        return image
+
+    def _render_home_button(self) -> Image:
+        image = PILHelper.create_scaled_image(
+            self._deck,
+            Image.open(self._assets["icon_home"]),
+            margins=[16, 18, 18, 15],
+        )
+
+        if self._layer_controller.mixing_selected:
+            active_color = (255, 0, 50)
+            image = ImageOps.colorize(image.convert("L"), black="white", white="black")
+            #
+            # draw = ImageDraw.Draw(image)
+            # draw.ellipse(
+            #     (5, 5, image.width - 10, image.height - 10),
+            #     outline=active_color,
+            #     width=4,
+            # )
 
         return image
 

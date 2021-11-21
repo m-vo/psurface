@@ -6,6 +6,8 @@ from streamdeck.util import ChannelPacking
 
 
 class InputSurface(Surface):
+    KEY_HOME = 31
+
     def init(self):
         super(InputSurface, self).init()
 
@@ -14,7 +16,7 @@ class InputSurface(Surface):
 
         def update_inputs() -> None:
             self._fragment_renderer.reset()
-            all_keys = list(range(32))
+            all_keys = list(range(31))
             packing = ChannelPacking.get_color_packing(self._session.input_channels)
 
             for key, channel in packing.items():
@@ -30,13 +32,24 @@ class InputSurface(Surface):
         self._session.channel_mapping_event.append(update_inputs)
         update_inputs()
 
-    def _on_key_up(self, key: int):
+    def _on_key_up(self, key: int) -> None:
+        super()._on_key_up(key)
+
         channel = self._fragment_renderer.get_channel(key)
 
         if isinstance(channel, InputChannel) and channel.is_visible:
             self._layer_controller.select_input(channel)
 
-    def _on_key_down_long(self, key: int):
+    def _on_key_down_long(self, key: int) -> None:
+        super()._on_key_down_long(key)
+
+        # ignore direct action for select keys
+        if key in [self.KEY_HOME]:
+            self._on_key_down(key)
+            self._on_key_up(key)
+
+            return
+
         channel = self._fragment_renderer.get_channel(key)
         if channel and channel.is_visible:
             channel.set_mute(not channel.mute)

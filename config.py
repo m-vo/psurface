@@ -57,7 +57,7 @@ class Config:
         data = self._data["control"]["scenes"]
         self._enforce_keys(
             data,
-            ["mixing_start", "outputs_left_start", "outputs_right", "sends", "custom_aux", "custom_fx"],
+            ["mixing_start", "virtual_left_start", "virtual_right", "sends", "custom_aux", "custom_fx"],
             "control.scenes",
         )
 

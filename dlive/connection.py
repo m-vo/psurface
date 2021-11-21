@@ -30,30 +30,24 @@ class DLiveSocketPort(SocketPort):
             if not success:
                 raise ConnectionRefusedError("Invalid credentials")
 
-    def __enter__(self) -> None:
-        self._io_lock.acquire()
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self._io_lock.release()
-
     def send_bytes(self, byte_list: list) -> None:
-        with self:
-            try:
+        try:
+            with self._io_lock:
                 self._wfile.write(bytearray(byte_list))
                 self._wfile.flush()
-            except socket.error as err:
-                if err.errno == 32:
-                    # Broken pipe. The other end has disconnected.
-                    self.close()
+        except socket.error as err:
+            if err.errno == 32:
+                # Broken pipe. The other end has disconnected.
+                self.close()
 
-                raise IOError(err.args[1])
+            raise IOError(err.args[1])
 
     def _authenticate(self, auth_string: str) -> bool:
-        with self:
-            try:
+        try:
+            with self._io_lock:
                 self._send(auth_string.encode())
                 ack = self._rfile.read(6)
                 return ack.decode() == "AuthOK"
 
-            except IOError:
-                return False
+        except IOError:
+            return False

@@ -1,6 +1,6 @@
 from collections import deque
 from threading import Lock
-from typing import Deque
+from typing import Callable, Deque, List, Tuple
 
 from mido.messages.messages import Message, SysexData
 
@@ -31,13 +31,24 @@ class Decoder(Protocol):
         self.send_level_changed_event: Event = Event()
         self.scene_changed_event: Event = Event()
 
+        self._decode_lock = Lock()
+        self._handlers_to_execute: Deque[Tuple[Callable, List]] = deque()
+
     def feed_message(self, message: Message):
-        self._messages.appendleft(message)
+        with self._decode_lock:
+            self._messages.appendleft(message)
 
-        if len(self._messages) > self._max_window:
-            self._messages.pop()
+            if len(self._messages) > self._max_window:
+                self._messages.pop()
 
-        self._decode()
+            self._decode()
+
+        try:
+            while handler_and_args := self._handlers_to_execute.popleft():
+                handler, args = handler_and_args
+                handler(*args)
+        except IndexError:
+            pass
 
     def _decode(self):
         m = self._messages
@@ -59,7 +70,9 @@ class Decoder(Protocol):
 
                 if parameter_id == 0x17:
                     # (!) level
-                    self.level_changed_event(self._decode_channel_identifier(n, ch), Level(value))
+                    self._handlers_to_execute.append(
+                        (self.level_changed_event, [self._decode_channel_identifier(n, ch), Level(value)])
+                    )
                 else:
                     # ignore unknown parameter
                     pass
@@ -79,7 +92,9 @@ class Decoder(Protocol):
                 ch = m[1].note
 
                 # (!) mute on/off
-                self.mute_changed_event(self._decode_channel_identifier(n, ch), 0x7F == m[1].velocity)
+                self._handlers_to_execute.append(
+                    (self.mute_changed_event, [self._decode_channel_identifier(n, ch), 0x7F == m[1].velocity])
+                )
 
                 m.clear()
                 return
@@ -89,7 +104,7 @@ class Decoder(Protocol):
                 scene_offset = m[0].program
 
                 # (!) scene recall
-                self.scene_changed_event((n << 7) + scene_offset)
+                self._handlers_to_execute.append((self.scene_changed_event, [(n << 7) + scene_offset]))
 
                 m.clear()
                 return
@@ -111,11 +126,11 @@ class Decoder(Protocol):
             label = bytearray(d[3:]).decode("ASCII").strip("0x\00")
 
             # (!) channel label
-            self.label_changed_event(identifier, label)
+            self._handlers_to_execute.append((self.label_changed_event, [identifier, label]))
 
         elif parameter == 0x05 and d[3] <= 0x07:
             # (!) channel color
-            self.color_changed_event(identifier, Color(d[3]))
+            self._handlers_to_execute.append((self.color_changed_event, [identifier, Color(d[3])]))
 
         elif parameter == 0x0D and 5 <= len(d) <= 6:
             # todo: this is a bug in the mixrack software where `SendN` isn't transmitted
@@ -127,7 +142,9 @@ class Decoder(Protocol):
             to_channel_identifier = self._decode_channel_identifier(d[3], d[4])
 
             # (!) send level
-            self.send_level_changed_event(identifier, to_channel_identifier, Level(d[5]))
+            self._handlers_to_execute.append(
+                (self.send_level_changed_event, [identifier, to_channel_identifier, Level(d[5])])
+            )
 
     def _decode_channel_identifier(self, n: int, ch: int) -> ChannelIdentifier:
         return ChannelIdentifier.from_raw_data(n - self._bank_offset, ch)

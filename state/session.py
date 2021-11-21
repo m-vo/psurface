@@ -1,5 +1,4 @@
 import time
-from threading import Thread
 from typing import Dict, List, Optional
 
 from app import App
@@ -68,8 +67,13 @@ class Session:
         self._channels[self._virtual_feedback.identifier.__hash__()] = self._virtual_feedback
 
         # inputs
+        # let inputs hydrate sends on demand as it's an expensive operation
+        def hydrate_sends_callback(input_channel: InputChannel) -> None:
+            for to_channel in self.output_channels:
+                self._encoder.request_send_level(input_channel, to_channel)
+
         for index in range(tracking_config["number_of_inputs"]):
-            channel = InputChannel(ChannelIdentifier(Bank.INPUT, index))
+            channel = InputChannel(ChannelIdentifier(Bank.INPUT, index), hydrate_sends_callback)
 
             # initialize sends for all aux and fx channels
             for to_channel in [
@@ -110,6 +114,10 @@ class Session:
         return list(self._virtual.values())
 
     @property
+    def virtual_feedback_channel(self) -> OutputChannel:
+        return self._virtual_feedback
+
+    @property
     def channels(self) -> List[Channel]:
         return list(self._channels.values())
 
@@ -146,9 +154,12 @@ class Session:
         App.settings.set_status("Syncing…")
 
         for channel in self._virtual.values():
-            channel.reset()
+            channel.unbind()
 
         self.route_feedback_to_output(None)
+        self.virtual_feedback_channel.set_mute(False)
+        self.virtual_feedback_channel.set_color(Color.OFF)
+        self.virtual_feedback_channel.set_label("VFeedb.")
 
         for channel in self._channels.values():
             self._encoder.request_label(channel)
@@ -162,12 +173,25 @@ class Session:
 
         # poll color attribute every few seconds, as it is currently not
         # transmitted on change
-        def poll_updates():
+        def poll_updates() -> None:
             for c in self._channels.values():
                 if not isinstance(c, VirtualChannel):
                     self._encoder.request_color(c)
 
-        App.scheduler.execute_interval("poll_session_updates", len(self._channels) * 0.03, poll_updates)
+        App.scheduler.execute_interval("poll_session_updates", max(len(self._channels) * 0.04, 4), poll_updates)
+
+        def hydrate_sends() -> None:
+            grace_time = len(self.output_channels) * 0.01
+            print(f"Begin hydrating with grace interval of {round(grace_time, 2)}s…")
+            App.settings.set_status("Hydrating…")
+
+            for c in self._inputs.values():
+                if c.hydrate_sends():
+                    time.sleep(grace_time)
+
+            App.settings.set_status("Fully hydrated")
+
+        App.scheduler.execute_delayed("hydrate_sends", 4, hydrate_sends)
 
     def load_scene(self, scene: int) -> None:
         self._encoder.recall_scene(scene)
@@ -180,41 +204,37 @@ class Session:
 
     def _on_update_label(self, identifier: ChannelIdentifier, label: str) -> None:
         if channel := self._lookup_channel(identifier):
-            with channel:
-                if self._DEBUG:
-                    print("label:  ", channel, "  ::  ", label)
+            if self._DEBUG:
+                print("label:  ", channel, "  ::  ", label)
 
-                if channel.set_label(label, False):
-                    self.channel_update_event(channel)
-                    self.channel_mapping_event()
+            if channel.set_label(label, False):
+                self.channel_update_event(channel)
+                self.channel_mapping_event()
 
     def _on_update_color(self, identifier: ChannelIdentifier, color: Color) -> None:
         if channel := self._lookup_channel(identifier):
-            with channel:
-                if self._DEBUG:
-                    print("color:  ", channel, "  ::  ", color)
+            if self._DEBUG:
+                print("color:  ", channel, "  ::  ", color)
 
-                if channel.set_color(color, False):
-                    self.channel_update_event(channel)
-                    self.channel_mapping_event()
+            if channel.set_color(color, False):
+                self.channel_update_event(channel)
+                self.channel_mapping_event()
 
     def _on_update_mute(self, identifier: ChannelIdentifier, enabled: bool) -> None:
         if channel := self._lookup_channel(identifier):
-            with channel:
-                if self._DEBUG:
-                    print("mute:   ", channel, "  ::  ", enabled)
+            if self._DEBUG:
+                print("mute:   ", channel, "  ::  ", enabled)
 
-                if channel.set_mute(enabled, False):
-                    self.channel_update_event(channel)
+            if channel.set_mute(enabled, False):
+                self.channel_update_event(channel)
 
     def _on_update_level(self, identifier: ChannelIdentifier, level: Level) -> None:
         if channel := self._lookup_channel(identifier):
-            with channel:
-                if self._DEBUG:
-                    print("level:  ", channel, "  ::  ", level)
+            if self._DEBUG:
+                print("level:  ", channel, "  ::  ", level)
 
-                if channel.set_level(level, False):
-                    self.channel_update_event(channel)
+            if channel.set_level(level, False):
+                self.channel_update_event(channel)
 
     def _on_update_send_level(
         self,
@@ -231,9 +251,8 @@ class Session:
         if not isinstance(channel, InputChannel) or not isinstance(to_channel, OutputChannel):
             return
 
-        with channel:
-            if channel.set_send_level(to_channel, level, False):
-                self.channel_update_event(channel)
+        if channel.set_send_level(to_channel, level, False):
+            self.channel_update_event(channel)
 
     def _on_recall_scene(self, scene: int) -> None:
         if self._scene != scene:
