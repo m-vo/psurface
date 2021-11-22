@@ -1,4 +1,4 @@
-from typing import Optional, Set
+from typing import List, Optional, Set
 
 from app import App
 from common.event import Event
@@ -22,6 +22,8 @@ class LayerController:
 
         scene_config = App.config.control_scenes
         self._max_input_index = App.config.control_tracking["number_of_inputs"] - 1
+        self._max_fx_return_index = App.config.control_tracking["number_of_fx_returns"] - 1
+        self._last_output_bank_start = App.config.control_tracking["last_output_bank_start"]
 
         self._scene_mixing_start = scene_config["mixing_start"]
         self._scene_virtual_left_start = scene_config["virtual_left_start"]
@@ -219,23 +221,38 @@ class LayerController:
 
     def _configure_outputs(self, output_channel: OutputChannel) -> None:
         """Patch virtual channels for outputs configuration."""
-        input_channels = self._session.input_channels
         virtual_channels = self._session.virtual_channels
 
-        channel_region_from = min(self._bank * 16, self._max_input_index)
-        channel_region_to = min(channel_region_from + 14, self._max_input_index)
         index = 0
 
-        # input sends
-        for input_index in range(channel_region_from, channel_region_to + 1):
-            input_channel = input_channels[input_index]
+        def bind_sends(channels: List[InputChannel], index_from: int, index_to: int):
+            nonlocal index
 
-            if not input_channel.is_visible or not virtual_channels[index].bind_send(
-                input_channel, output_channel, True
-            ):
-                virtual_channels[index].tie_to_zero()
+            for channel_index in range(index_from, index_to + 1):
+                channel = channels[channel_index]
 
-            index += 1
+                if not channel.is_visible or not virtual_channels[index].bind_send(channel, output_channel, True):
+                    virtual_channels[index].tie_to_zero()
+
+                index += 1
+
+        if self._bank < 4:
+            # inputs from banks
+            channel_region_from = min(self._bank * 16, self._max_input_index)
+            channel_region_to = min(channel_region_from + 14, self._max_input_index)
+
+            bind_sends(self._session.input_channels, channel_region_from, channel_region_to)
+
+        elif self._bank == 4:
+            # fx returns
+            bind_sends(self._session.fx_returns, 0, min(14, self._max_fx_return_index))
+
+        elif self._bank == 5:
+            # inputs fixed
+            channel_region_from = self._last_output_bank_start
+            channel_region_to = min(channel_region_from + 14, self._max_input_index)
+
+            bind_sends(self._session.input_channels, channel_region_from, channel_region_to)
 
         # unused
         for unused_index in range(index, 15):

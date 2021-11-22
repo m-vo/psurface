@@ -41,7 +41,9 @@ class Config:
                 "number_of_stereo_aux",
                 "number_of_mono_fx",
                 "number_of_stereo_fx",
+                "number_of_fx_returns",
                 "virtual_start",
+                "last_output_bank_start",
                 "feedback_matrix",
                 "talk_to_monitor",
                 "talk_to_stage",
@@ -50,7 +52,7 @@ class Config:
         )
 
         # use zero based offset internally
-        for key in ["virtual_start", "feedback_matrix", "talk_to_monitor", "talk_to_stage"]:
+        for key in ["virtual_start", "last_output_bank_start", "feedback_matrix", "talk_to_monitor", "talk_to_stage"]:
             data[key] -= 1
 
         return data

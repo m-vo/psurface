@@ -26,6 +26,7 @@ class Session:
 
         self._channels: Dict[int, Channel] = {}
         self._inputs: Dict[int, InputChannel] = {}
+        self._fx_returns: Dict[int, InputChannel] = {}
         self._aux: Dict[int, MultiChannel] = {}
         self._fx: Dict[int, MultiChannel] = {}
         self._virtual: Dict[int, VirtualChannel] = {}
@@ -75,15 +76,21 @@ class Session:
         for index in range(tracking_config["number_of_inputs"]):
             channel = InputChannel(ChannelIdentifier(Bank.INPUT, index), hydrate_sends_callback)
 
-            # initialize sends for all aux and fx channels
-            for to_channel in [
-                *self._aux.values(),
-                *self._fx.values(),
-                *self._virtual.values(),
-            ]:
+            # initialize sends
+            for to_channel in [*self._aux.values(), *self._fx.values(), self._virtual_feedback]:
                 channel.set_send_level(to_channel)
 
             self._inputs[index] = channel
+            self._channels[channel.identifier.__hash__()] = channel
+
+        for index in range(tracking_config["number_of_fx_returns"]):
+            channel = InputChannel(ChannelIdentifier(Bank.FX_RETURN, index), hydrate_sends_callback)
+
+            # initialize sends
+            for to_channel in [*self._aux.values(), *self._fx.values(), self._virtual_feedback]:
+                channel.set_send_level(to_channel)
+
+            self._fx_returns[index] = channel
             self._channels[channel.identifier.__hash__()] = channel
 
         # tracking
@@ -96,6 +103,10 @@ class Session:
     @property
     def input_channels(self) -> List[InputChannel]:
         return list(self._inputs.values())
+
+    @property
+    def fx_returns(self) -> List[InputChannel]:
+        return list(self._fx_returns.values())
 
     @property
     def aux_channels(self) -> List[OutputChannel]:
@@ -185,7 +196,7 @@ class Session:
             print(f"Begin hydrating with grace interval of {round(grace_time, 2)}s…")
             App.settings.set_status("Hydrating…")
 
-            for c in self._inputs.values():
+            for c in [*self._inputs.values(), *self._fx_returns.values()]:
                 if c.hydrate_sends():
                     time.sleep(grace_time)
 
