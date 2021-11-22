@@ -13,6 +13,7 @@ class LayerController:
     _MODE_OUTPUTS = 3
     _MODE_CUSTOM_AUX = 4
     _MODE_CUSTOM_FX = 5
+    _MODE_CUSTOM_UTIL = 6
 
     def __init__(self, session: Session):
         self.selection_update_event = Event()
@@ -28,6 +29,7 @@ class LayerController:
         self._scene_sends = scene_config["sends"]
         self._scene_custom_aux = scene_config["custom_aux"]
         self._scene_custom_fx = scene_config["custom_fx"]
+        self._scene_custom_util = scene_config["custom_util"]
 
         # global bank, mode and last selected channels
         self._bank: int = 0
@@ -71,6 +73,10 @@ class LayerController:
     @property
     def custom_fx_selected(self) -> bool:
         return self._mode == self._MODE_CUSTOM_FX
+
+    @property
+    def custom_util_selected(self) -> bool:
+        return self._mode == self._MODE_CUSTOM_UTIL
 
     @property
     def s_dca_affected_channels(self) -> int:
@@ -125,6 +131,9 @@ class LayerController:
 
     def select_custom_fx(self) -> None:
         self._session.load_scene(self._scene_custom_fx)
+
+    def select_custom_util(self) -> None:
+        self._session.load_scene(self._scene_custom_util)
 
     def _on_scene_change(self, scene: int) -> None:
         trigger_selection_update = False
@@ -192,6 +201,15 @@ class LayerController:
             self._s_dca_enabled = False
 
             App.settings.set_status(f"Custom | FX")
+            self._select_exclusively(None)
+
+            self._session.route_feedback_to_output(None)
+
+        elif scene == self._scene_custom_util:
+            select_mode(self._MODE_CUSTOM_UTIL)
+            self._s_dca_enabled = False
+
+            App.settings.set_status(f"Custom | UTIL")
             self._select_exclusively(None)
 
             self._session.route_feedback_to_output(None)

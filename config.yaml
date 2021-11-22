@@ -21,17 +21,21 @@ streamdeck:
 control:
   tracking:
     # number of inputs/aux busses/fx returns to track
-    number_of_inputs: 32
-    number_of_mono_aux: 4
-    number_of_stereo_aux: 2
-    number_of_mono_fx: 4
-    number_of_stereo_fx: 2
+    number_of_inputs: 96
+    number_of_mono_aux: 5
+    number_of_stereo_aux: 0
+    number_of_mono_fx: 8
+    number_of_stereo_fx: 0
 
     # first of 16 virtual input channels
     virtual_start: 101
 
     # feedback matrix channel
     feedback_matrix: 1
+
+    # talkback channels (need to be part of tracked inputs)
+    talk_to_monitor: 65
+    talk_to_stage: 66
 
   scenes:
     # mixing bank 1..6
@@ -45,5 +49,6 @@ control:
     sends: 448
 
     # custom scenes
-    custom_aux: 469
-    custom_fx: 479
+    custom_aux: 461
+    custom_fx: 462
+    custom_util: 463

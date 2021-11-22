@@ -1,3 +1,4 @@
+from copy import copy
 from typing import Optional
 
 import yaml
@@ -24,14 +25,14 @@ class Config:
 
     @property
     def streamdeck_devices(self) -> dict:
-        data = self._data["streamdeck"]["devices"]
+        data = copy(self._data["streamdeck"]["devices"])
         self._enforce_keys(data, ["system", "input", "output"], "streamdeck.devices")
 
         return data
 
     @property
     def control_tracking(self) -> dict:
-        data = self._data["control"]["tracking"]
+        data = copy(self._data["control"]["tracking"])
         self._enforce_keys(
             data,
             [
@@ -42,22 +43,24 @@ class Config:
                 "number_of_stereo_fx",
                 "virtual_start",
                 "feedback_matrix",
+                "talk_to_monitor",
+                "talk_to_stage",
             ],
             "control.tracking",
         )
 
         # use zero based offset internally
-        for key in ["virtual_start", "feedback_matrix"]:
+        for key in ["virtual_start", "feedback_matrix", "talk_to_monitor", "talk_to_stage"]:
             data[key] -= 1
 
         return data
 
     @property
     def control_scenes(self) -> dict:
-        data = self._data["control"]["scenes"]
+        data = copy(self._data["control"]["scenes"])
         self._enforce_keys(
             data,
-            ["mixing_start", "virtual_left_start", "virtual_right", "sends", "custom_aux", "custom_fx"],
+            ["mixing_start", "virtual_left_start", "virtual_right", "sends", "custom_aux", "custom_fx", "custom_util"],
             "control.scenes",
         )
 

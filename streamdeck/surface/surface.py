@@ -240,15 +240,7 @@ class Surface(ABC):
         )
 
         if self._layer_controller.mixing_selected:
-            active_color = (255, 0, 50)
             image = ImageOps.colorize(image.convert("L"), black="white", white="black")
-            #
-            # draw = ImageDraw.Draw(image)
-            # draw.ellipse(
-            #     (5, 5, image.width - 10, image.height - 10),
-            #     outline=active_color,
-            #     width=4,
-            # )
 
         return image
 

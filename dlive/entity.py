@@ -487,7 +487,7 @@ class VirtualChannel(OutputChannel):
 
         # set label and color from target/base channel
         if not inverse:
-            self.set_label(f">{to_channel.label}")
+            self.set_label(f"@{to_channel.label}")
             self.set_color(to_channel.color)
         else:
             self.set_label(f"@{base_channel.label}")
@@ -527,7 +527,7 @@ class VirtualChannel(OutputChannel):
                     channel.backup_sends()
 
         # set label and color from send channel
-        self.set_label(f"={to_channel.label}")
+        self.set_label(f"@{to_channel.label}")
         self.set_color(to_channel.color)
         self.set_mute(False)
 
