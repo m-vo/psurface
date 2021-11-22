@@ -36,6 +36,7 @@ class LayerController:
         # global bank, mode and last selected channels
         self._bank: int = 0
         self._mode: int = -1
+        self._ignore_next_recall: bool = False
         self._last_output_channel: OutputChannel = session.output_channels[0]
         self._last_input_channel: InputChannel = session.input_channels[0]
 
@@ -92,14 +93,19 @@ class LayerController:
         return len(self._s_dca_affected_channels)
 
     def select_mixing(self):
-        scene = self._scene_mixing_start + self._bank
-        self._session.load_scene(scene)
+        # There is a bug in the 1.9 firmware that prevents the bank indicator
+        # of the mixing scene to be lit even though a matching scene is loaded.
+        # It only happens for certain transitions (output -> input -!-> mixing),
+        # so we work around it by calling another scene first and ignoring
+        # their action.
+        self._ignore_next_recall = True
+        self._session.load_scene(self._scene_virtual_left_start)
+
+        self._session.load_scene(self._scene_mixing_start + self._bank)
 
     def select_output(self, output_channel: OutputChannel) -> None:
         self._last_output_channel = output_channel
-
-        scene = self._scene_virtual_left_start + self._bank
-        self._session.load_scene(scene)
+        self._session.load_scene(self._scene_virtual_left_start + self._bank)
 
     def select_input(self, input_channel: InputChannel) -> None:
         if not self._s_dca_enabled:
@@ -145,6 +151,12 @@ class LayerController:
         self._session.load_scene(self._scene_custom_util)
 
     def _on_scene_change(self, scene: int) -> None:
+        # todo: this is an ugly hack, that we can hopefully remove anytime in the future
+        #       see "select_mixing()"
+        if self._ignore_next_recall:
+            self._ignore_next_recall = False
+            return
+
         trigger_selection_update = False
 
         def select_mode(mode: int):
