@@ -15,6 +15,7 @@ from streamdeck.util import ChannelPacking
 
 
 class OutputSurface(Surface):
+    KEY_FILTER = 16
     KEY_CUSTOM_AUX_MASTER = 24
     KEY_CUSTOM_FX_MASTER = 25
     KEY_CUSTOM_UTIL_MASTER = 26
@@ -31,6 +32,7 @@ class OutputSurface(Surface):
         super(OutputSurface, self).__init__(device, session, layer_controller)
 
         self._assets["icon_mic"] = os.path.join(self._assets_path, "mic.png")
+        self._assets["icon_filter"] = os.path.join(self._assets_path, "filter.png")
 
     def init(self):
         super(OutputSurface, self).init()
@@ -91,8 +93,14 @@ class OutputSurface(Surface):
         self._layer_controller.selection_update_event.append(setup_custom_selects)
         setup_custom_selects()
 
-    def _on_key_up(self, key: int) -> None:
-        super()._on_key_up(key)
+        def update_filter() -> None:
+            self._set_image(self.KEY_FILTER, self._render_filter_button())
+
+        App.settings.filter_changed_event.append(update_filter)
+        update_filter()
+
+    def _on_key_down(self, key: int) -> None:
+        super()._on_key_down(key)
 
         if key == self.KEY_CUSTOM_AUX_MASTER:
             self._layer_controller.select_custom_aux()
@@ -109,6 +117,12 @@ class OutputSurface(Surface):
         if key in [self.KEY_TALK_TO_MONITOR, self.KEY_TALK_TO_STAGE]:
             self._on_key_down_long(key)
             return
+
+        if key == self.KEY_FILTER:
+            App.settings.toggle_output_filter()
+
+    def _on_key_up(self, key: int) -> None:
+        super()._on_key_up(key)
 
         channel = self._fragment_renderer.get_channel(key)
 
@@ -179,3 +193,23 @@ class OutputSurface(Surface):
 
     def _render_talk_to_stage(self, channel: Channel) -> Image:
         return self._render_talk_to(channel, "STAGE")
+
+    def _render_filter_button(self) -> Image:
+        image = PILHelper.create_scaled_image(
+            self._deck,
+            Image.open(self._assets["icon_filter"]),
+            margins=[26, 24, 23, 24],
+        )
+
+        if App.settings.output_filter:
+            active_color = (255, 0, 50)
+            image = ImageOps.colorize(image.convert("L"), black="black", white=active_color)
+
+            draw = ImageDraw.Draw(image)
+            draw.ellipse(
+                (8, 8, image.width - 8, image.height - 8),
+                outline=active_color,
+                width=5,
+            )
+
+        return image

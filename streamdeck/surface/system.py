@@ -51,8 +51,14 @@ class SystemSurface(Surface):
         self._layer_controller.selection_update_event.append(setup_selects)
         setup_selects()
 
+        def update_direct_action() -> None:
+            self._set_image(self.KEY_DIRECT_ACTION, self._render_direct_action_button())
+
+        App.settings.direct_action_changed_event.append(update_direct_action)
+        update_direct_action()
+
+        # init brightness
         self._update_brightness()
-        self._update_direct_action()
 
     def _on_key_down(self, key: int) -> None:
         super()._on_key_down(key)
@@ -63,7 +69,6 @@ class SystemSurface(Surface):
 
         if key == self.KEY_DIRECT_ACTION:
             App.settings.toggle_direct_action()
-            self._update_direct_action()
 
     def _on_key_up(self, key: int) -> None:
         super()._on_key_up(key)
@@ -90,9 +95,6 @@ class SystemSurface(Surface):
         super(SystemSurface, self)._update_brightness()
 
         self._set_image(self.KEY_BRIGHTNESS, self._render_brightness_indicator())
-
-    def _update_direct_action(self) -> None:
-        self._set_image(self.KEY_DIRECT_ACTION, self._render_direct_action_button())
 
     def _render_brightness_indicator(self) -> Image:
         image = PILHelper.create_scaled_image(

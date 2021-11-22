@@ -5,10 +5,13 @@ class GlobalSettings:
     def __init__(self):
         self._brightness: int = 0  # 0-4
         self._direct_action: bool = False
+        self._output_filter: bool = False
         self._status: str = ""
 
         self.brightness_changed_event = Event()
         self.status_changed_event = Event()
+        self.direct_action_changed_event = Event()
+        self.filter_changed_event = Event()
 
     @property
     def brightness(self) -> int:
@@ -28,9 +31,15 @@ class GlobalSettings:
 
     def toggle_direct_action(self) -> None:
         self._direct_action = not self._direct_action
+        self.direct_action_changed_event()
 
-    def disable_direct_action(self) -> None:
-        self._direct_action = False
+    @property
+    def output_filter(self) -> bool:
+        return self._output_filter
+
+    def toggle_output_filter(self) -> None:
+        self._output_filter = not self._output_filter
+        self.filter_changed_event()
 
     @property
     def status(self) -> str:

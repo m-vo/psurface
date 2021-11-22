@@ -2,7 +2,7 @@ from typing import List, Optional, Set
 
 from app import App
 from common.event import Event
-from dlive.entity import Channel, Color, InputChannel, OutputChannel
+from dlive.entity import Channel, Color, InputChannel, Level, OutputChannel
 from state.session import Session
 
 
@@ -59,6 +59,13 @@ class LayerController:
             input_channel.s_dca_changed_event.append(track_affected_channels)
 
         session.scene_update_event.append(self._on_scene_change)
+
+        # update view when filter state changes
+        def update_output_view():
+            if self._mode == self._MODE_OUTPUTS:
+                self.select_output(self._last_output_channel)
+
+        App.settings.filter_changed_event.append(update_output_view)
 
     @property
     def mixing_selected(self) -> bool:
@@ -236,23 +243,38 @@ class LayerController:
 
                 index += 1
 
-        if self._bank < 4:
-            # inputs from banks
-            channel_region_from = min(self._bank * 16, self._max_input_index)
-            channel_region_to = min(channel_region_from + 14, self._max_input_index)
+        if App.settings.output_filter:
+            channels: List[InputChannel] = [*self._session.input_channels, *self._session.fx_returns]
 
-            bind_sends(self._session.input_channels, channel_region_from, channel_region_to)
+            # filtered view
+            for channel in channels:
+                if not channel.is_visible or channel.get_send_level(output_channel) == Level.VALUE_OFF:
+                    continue
 
-        elif self._bank == 4:
-            # fx returns
-            bind_sends(self._session.fx_returns, 0, min(14, self._max_fx_return_index))
+                if virtual_channels[index].bind_send(channel, output_channel, True):
+                    index += 1
 
-        elif self._bank == 5:
-            # inputs fixed
-            channel_region_from = self._last_output_bank_start
-            channel_region_to = min(channel_region_from + 14, self._max_input_index)
+                    if index == 15:
+                        break
 
-            bind_sends(self._session.input_channels, channel_region_from, channel_region_to)
+        else:
+            if self._bank < 4:
+                # inputs from banks
+                channel_region_from = min(self._bank * 16, self._max_input_index)
+                channel_region_to = min(channel_region_from + 14, self._max_input_index)
+
+                bind_sends(self._session.input_channels, channel_region_from, channel_region_to)
+
+            elif self._bank == 4:
+                # fx returns
+                bind_sends(self._session.fx_returns, 0, min(14, self._max_fx_return_index))
+
+            elif self._bank == 5:
+                # inputs fixed
+                channel_region_from = self._last_output_bank_start
+                channel_region_to = min(channel_region_from + 14, self._max_input_index)
+
+                bind_sends(self._session.input_channels, channel_region_from, channel_region_to)
 
         # unused
         for unused_index in range(index, 15):
