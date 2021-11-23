@@ -1,4 +1,9 @@
+#!python
+
+import logging
+import os
 import sys
+import time
 
 from app import App
 from dlive.connection import DLiveSocketPort
@@ -49,14 +54,21 @@ def main():
 
 if __name__ == "__main__":
     if len(sys.argv) > 0 and "--dev" in sys.argv:
+        print(sys.executable)
+
         main()
 
-    while True:
+    else:
+        # run; log and restart in case of an error
         try:
-            # todo: restart process instead
             main()
-        except:
-            # ignore + restart
-            print("Unexpected error:", sys.exc_info()[0])
 
-            pass
+        except:
+            print("\n\n:-(\n")
+            print(sys.exc_info()[1])
+
+            logging.basicConfig(
+                format="%(asctime)s %(levelname)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S", filename="error.log"
+            )
+
+            logging.exception("PSurface crashed")
