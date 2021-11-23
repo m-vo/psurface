@@ -1,7 +1,7 @@
 from threading import Thread
 from typing import Callable, Dict, List, Optional, Tuple
 
-from dlive.entity import Channel, Color
+from dlive.entity import Channel, Color, OutputChannel
 
 
 class FragmentRenderer:
@@ -127,5 +127,37 @@ class ChannelPacking:
         # fall back to not leaving space
         if max(pack_map) > 8:
             pack_map = pack(leave_space=False)
+
+        return pack_map
+
+    @staticmethod
+    def get_out_split_packing(left: List[OutputChannel], right: List[OutputChannel]) -> Dict[int, OutputChannel]:
+        channels_left = list(filter(lambda c: c.is_visible, left))
+        channels_right = list(filter(lambda c: c.is_visible, right))
+
+        len_left = len(channels_left)
+        len_right = len(channels_right)
+
+        if len_left <= 8:
+            space = 8 - len_left
+        else:
+            if (len_left + len_right + 1) < 15:
+                space = 1
+            else:
+                space = 0
+
+        pack_map: Dict[int, Channel] = {}
+
+        index = 0
+
+        for channel in channels_left:
+            pack_map[index] = channel
+            index += 1
+
+        index += space
+
+        for channel in channels_right:
+            pack_map[index] = channel
+            index += 1
 
         return pack_map

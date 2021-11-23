@@ -4,6 +4,7 @@ from app import App
 from common.event import Event
 from dlive.entity import Channel, Color, InputChannel, Level, OutputChannel
 from state.session import Session
+from streamdeck.util import ChannelPacking
 
 
 class LayerController:
@@ -299,19 +300,15 @@ class LayerController:
     def _configure_sends_on_fader(self, input_channel: InputChannel) -> None:
         """Patch virtual channels for sends on fader configuration."""
         virtual_channels = self._session.virtual_channels
-        index = 0
-        max_index = 15
+        all_keys = list(range(16))
 
-        for output_channel in self._session.output_channels:
-            if not output_channel.is_visible or not virtual_channels[index].bind_send(input_channel, output_channel):
-                continue
+        for index, output_channel in ChannelPacking.get_out_split_packing(
+            self._session.aux_channels, self._session.fx_channels
+        ).items():
+            if index in all_keys and virtual_channels[index].bind_send(input_channel, output_channel):
+                all_keys.remove(index)
 
-            index += 1
-
-            if index > max_index:
-                break
-
-        for unused_index in range(index, max_index + 1):
+        for unused_index in all_keys:
             virtual_channels[unused_index].tie_to_zero()
 
         self._session.route_feedback_to_output(None)
