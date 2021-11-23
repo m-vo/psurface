@@ -61,6 +61,9 @@ class Level(int):
     VALUE_OFF = 0x00
     VALUE_FADER_MIDPOINT = 0x58
 
+    # trim base value for effect sends
+    VALUE_AUDIBLE_MINIMUM = 0x43
+
     def __new__(cls, value: int = 0):
         return int.__new__(cls, max(min(Level.VALUE_FULL, value), Level.VALUE_OFF))
 
@@ -621,16 +624,31 @@ class VirtualChannel(OutputChannel):
             try:
                 # sanity check against race conditions
                 # todo: Consider moving value logic to Level entity
-                reference = (Level.VALUE_OFF, Level.VALUE_FULL)[level > Level.VALUE_FADER_MIDPOINT]
-                diff = (
-                    (reference - base_level)
-                    * (level - Level.VALUE_FADER_MIDPOINT)
-                    / (reference - Level.VALUE_FADER_MIDPOINT)
-                )
+                if level == Level.VALUE_OFF:
+                    new_level = Level(Level.VALUE_OFF)
+
+                elif base_level <= Level.VALUE_AUDIBLE_MINIMUM and level < Level.VALUE_FADER_MIDPOINT:
+                    new_level = Level(Level.VALUE_OFF)
+
+                else:
+                    if level >= Level.VALUE_FADER_MIDPOINT:
+                        diff = (
+                            (Level.VALUE_FULL - base_level)
+                            * (level - Level.VALUE_FADER_MIDPOINT)
+                            / (Level.VALUE_FULL - Level.VALUE_FADER_MIDPOINT)
+                        )
+
+                    else:
+                        diff = (
+                            (Level.VALUE_AUDIBLE_MINIMUM - base_level)
+                            * (Level.VALUE_FADER_MIDPOINT - level)
+                            / (Level.VALUE_FADER_MIDPOINT - Level.VALUE_OFF)
+                        )
+
+                    new_level = Level(base_level + int(diff))
 
                 # set level changes from new thread, so there is no waiting induced
-                level = Level(base_level + int(diff))
-                Thread(target=channel.set_send_level, args=[self._channel_send, level]).start()
+                Thread(target=channel.set_send_level, args=[self._channel_send, new_level]).start()
 
                 channel.mark_affected_by_s_dca(self._channel_send)
 
