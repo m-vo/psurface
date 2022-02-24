@@ -15,10 +15,10 @@ from streamdeck.util import ChannelPacking
 
 
 class OutputSurface(Surface):
-    KEY_FILTER = 16
-    KEY_CUSTOM_AUX_MASTER = 24
-    KEY_CUSTOM_FX_MASTER = 25
-    KEY_CUSTOM_UTIL_MASTER = 26
+    KEY_FILTER = 24
+    KEY_CUSTOM_AUX_MASTER = 25
+    KEY_CUSTOM_FX_MASTER = 26
+    KEY_CUSTOM_UTIL_MASTER = 27
     KEY_TALK_TO_MONITOR = 29
     KEY_TALK_TO_STAGE = 30
     KEY_HOME = 31
@@ -50,7 +50,7 @@ class OutputSurface(Surface):
             self._fragment_renderer.reset()
 
             # aux/fx
-            all_keys = list(range(16))
+            all_keys = list(range(24))
 
             def add(key: int, channel: Channel):
                 if key in all_keys:
@@ -61,7 +61,7 @@ class OutputSurface(Surface):
             for key, channel in ChannelPacking.get_type_packing(self._session.aux_channels).items():
                 add(key, channel)
 
-            for key, channel in ChannelPacking.get_type_packing(self._session.fx_channels).items():
+            for key, channel in ChannelPacking.get_color_packing(self._session.fx_channels, 16).items():
                 add(key + 8, channel)
 
             for unmapped in all_keys:

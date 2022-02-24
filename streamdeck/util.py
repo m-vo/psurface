@@ -44,7 +44,7 @@ class FragmentRenderer:
 
 class ChannelPacking:
     @staticmethod
-    def get_color_packing(channels: List[Channel]) -> Dict[int, Channel]:
+    def get_color_packing(channels: List[Channel], size: int = 32) -> Dict[int, Channel]:
         channels_by_color = {
             Color.BLUE: [],
             Color.LIGHT_BLUE: [],
@@ -85,11 +85,11 @@ class ChannelPacking:
             return pack_map
 
         # fall back to not leaving space
-        if max(pack_map) > 32:
+        if max(pack_map) >= size:
             pack_map = pack(leave_space=False)
 
         # fall back to dense packing
-        if max(pack_map) > 32:
+        if max(pack_map) >= size:
             pack_map = pack(avoid_break=False, leave_space=False)
 
         return pack_map
