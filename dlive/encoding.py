@@ -123,7 +123,7 @@ class Decoder(Protocol):
         parameter = d[1]
 
         if parameter == 0x02:
-            label = bytearray(d[3:]).decode("ASCII").strip("0x\00")
+            label = bytearray(d[3:]).decode("ASCII").strip("\00")
 
             # (!) channel label
             self._handlers_to_execute.append((self.label_changed_event, [identifier, label]))

@@ -42,7 +42,7 @@ class PSurface:
         self._session.track_changes()
 
         # wait some time until the internal state has settled before initializing event bound ui
-        App.scheduler.execute_delayed("run_ui", 1, self._ui.init)
+        App.scheduler.execute_delayed("run_ui", App.config.timing["ui_startup_delay"], self._ui.init)
 
         for message in self._dlive_out:
             self._decoder.feed_message(message)
