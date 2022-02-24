@@ -254,14 +254,14 @@ class Channel:
 
     @property
     def is_visible(self) -> bool:
-        return not re.match(r"^[0-9\s]*$", self._label)
+        return not re.match(r"^[0-9]*$", self._label)
 
     @property
     def selected(self) -> bool:
         return self._selected
 
     def set_label(self, label: str, trigger_change_event: bool = True) -> bool:
-        label = label[:8].strip("0x\00 ")
+        label = label[:8].strip()
 
         if self._label == label:
             return False
