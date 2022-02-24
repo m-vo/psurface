@@ -36,23 +36,39 @@ class Config:
         self._enforce_keys(
             data,
             [
+                # inputs
                 "number_of_inputs",
+                "talk_to_monitor",
+                "talk_to_stage",
+                # aux
                 "number_of_mono_aux",
+                "mono_aux_start",
                 "number_of_stereo_aux",
+                # external fx
+                "number_of_external_fx",
+                "external_fx_start",
+                # fx
                 "number_of_mono_fx",
                 "number_of_stereo_fx",
                 "number_of_fx_returns",
+                # other
                 "virtual_start",
                 "last_output_bank_start",
                 "feedback_matrix",
-                "talk_to_monitor",
-                "talk_to_stage",
             ],
             "control.tracking",
         )
 
         # use zero based offset internally
-        for key in ["virtual_start", "last_output_bank_start", "feedback_matrix", "talk_to_monitor", "talk_to_stage"]:
+        for key in [
+            "talk_to_monitor",
+            "talk_to_stage",
+            "mono_aux_start",
+            "external_fx_start",
+            "virtual_start",
+            "last_output_bank_start",
+            "feedback_matrix",
+        ]:
             data[key] -= 1
 
         return data

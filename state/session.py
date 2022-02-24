@@ -25,41 +25,52 @@ class Session:
         self._encoder = encoder
 
         self._channels: Dict[int, Channel] = {}
-        self._inputs: Dict[int, InputChannel] = {}
-        self._fx_returns: Dict[int, InputChannel] = {}
-        self._aux: Dict[int, MultiChannel] = {}
-        self._fx: Dict[int, MultiChannel] = {}
-        self._virtual: Dict[int, VirtualChannel] = {}
+        self._inputs: List[InputChannel] = []
+        self._fx_returns: List[InputChannel] = []
+        self._aux: List[MultiChannel] = []
+        self._fx: List[MultiChannel] = []
+        self._virtual: List[VirtualChannel] = []
         self._scene: int = -1
 
         tracking_config = App.config.control_tracking
 
         # aux channels
-        for index in range(tracking_config["number_of_mono_aux"]):
+        for index in range(
+            tracking_config["mono_aux_start"], tracking_config["mono_aux_start"] + tracking_config["number_of_mono_aux"]
+        ):
             channel = MultiChannel(ChannelIdentifier(Bank.MONO_AUX, index))
-            self._aux[index] = channel
+            self._aux.append(channel)
             self._channels[channel.identifier.__hash__()] = channel
 
         for index in range(tracking_config["number_of_stereo_aux"]):
             channel = MultiChannel(ChannelIdentifier(Bank.STEREO_AUX, index))
-            self._aux[index + tracking_config["number_of_mono_aux"]] = channel
+            self._aux.append(channel)
+            self._channels[channel.identifier.__hash__()] = channel
+
+        # external fx channels
+        for index in range(
+            tracking_config["external_fx_start"],
+            tracking_config["external_fx_start"] + tracking_config["number_of_external_fx"],
+        ):
+            channel = MultiChannel(ChannelIdentifier(Bank.MONO_AUX, index))
+            self._fx.append(channel)
             self._channels[channel.identifier.__hash__()] = channel
 
         # fx channels
         for index in range(tracking_config["number_of_mono_fx"]):
             channel = MultiChannel(ChannelIdentifier(Bank.MONO_FX_SEND, index))
-            self._fx[index] = channel
+            self._fx.append(channel)
             self._channels[channel.identifier.__hash__()] = channel
 
         for index in range(tracking_config["number_of_stereo_fx"]):
             channel = MultiChannel(ChannelIdentifier(Bank.STEREO_FX_SEND, index))
-            self._fx[index + tracking_config["number_of_mono_fx"]] = channel
+            self._fx.append(channel)
             self._channels[channel.identifier.__hash__()] = channel
 
         # virtual channels
         for index in range(tracking_config["virtual_start"], tracking_config["virtual_start"] + 16):
             channel = VirtualChannel(ChannelIdentifier(Bank.INPUT, index))
-            self._virtual[index] = channel
+            self._virtual.append(channel)
             self._channels[channel.identifier.__hash__()] = channel
 
         self._virtual_feedback: OutputChannel = OutputChannel(
@@ -77,20 +88,20 @@ class Session:
             channel = InputChannel(ChannelIdentifier(Bank.INPUT, index), hydrate_sends_callback)
 
             # initialize sends
-            for to_channel in [*self._aux.values(), *self._fx.values(), self._virtual_feedback]:
+            for to_channel in [*self._aux, *self._fx, self._virtual_feedback]:
                 channel.set_send_level(to_channel)
 
-            self._inputs[index] = channel
+            self._inputs.append(channel)
             self._channels[channel.identifier.__hash__()] = channel
 
         for index in range(tracking_config["number_of_fx_returns"]):
             channel = InputChannel(ChannelIdentifier(Bank.FX_RETURN, index), hydrate_sends_callback)
 
             # initialize sends
-            for to_channel in [*self._aux.values(), *self._fx.values(), self._virtual_feedback]:
+            for to_channel in [*self._aux, *self._fx, self._virtual_feedback]:
                 channel.set_send_level(to_channel)
 
-            self._fx_returns[index] = channel
+            self._fx_returns.append(channel)
             self._channels[channel.identifier.__hash__()] = channel
 
         # tracking
@@ -102,27 +113,27 @@ class Session:
 
     @property
     def input_channels(self) -> List[InputChannel]:
-        return list(self._inputs.values())
+        return self._inputs
 
     @property
     def fx_returns(self) -> List[InputChannel]:
-        return list(self._fx_returns.values())
+        return self._fx_returns
 
     @property
     def aux_channels(self) -> List[OutputChannel]:
-        return list(self._aux.values())
+        return self._aux
 
     @property
     def fx_channels(self) -> List[OutputChannel]:
-        return list(self._fx.values())
+        return self._fx
 
     @property
     def output_channels(self) -> List[OutputChannel]:
-        return [*self._aux.values(), *self._fx.values()]
+        return [*self._aux, *self._fx]
 
     @property
     def virtual_channels(self) -> List[VirtualChannel]:
-        return list(self._virtual.values())
+        return self._virtual
 
     @property
     def virtual_feedback_channel(self) -> OutputChannel:
@@ -158,13 +169,13 @@ class Session:
                 channel.send_level_changed_event.append(self._encoder.send_level)
 
         # track S-DCA changes
-        for channel in self._inputs.values():
+        for channel in self._inputs:
             channel.s_dca_changed_event.append(self.channel_update_event)
 
         # initialize channels, do not sync sends
         App.settings.set_status("Syncing…")
 
-        for channel in self._virtual.values():
+        for channel in self._virtual:
             channel.unbind()
 
         self.route_feedback_to_output(None)
@@ -196,7 +207,7 @@ class Session:
             print(f"Begin hydrating with grace interval of {round(grace_time, 2)}s…")
             App.settings.set_status("Hydrating…")
 
-            for c in [*self._inputs.values(), *self._fx_returns.values()]:
+            for c in [*self._inputs, *self._fx_returns]:
                 if c.hydrate_sends():
                     time.sleep(grace_time)
 
