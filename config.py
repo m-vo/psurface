@@ -96,6 +96,7 @@ class Config:
                 "hydration_grace_multiplier",
                 "session_poll_channel_multiplier",
                 "session_poll_min",
+                "channel_poll",
                 "ui_startup_delay",
             ],
             "timing",

@@ -75,6 +75,10 @@ timing:
   session_poll_channel_multiplier: 0.04
   session_poll_min: 4
 
+  # poll interval [s] after which the level, label and mute status of
+  # all channels are re-requested; set to 0 to disable
+  channel_poll: 0
+
   # time [s] after which the ui is booted; too small values will
   # significantly slow down the sync
   ui_startup_delay: 0.1

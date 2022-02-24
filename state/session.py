@@ -196,19 +196,35 @@ class Session:
 
         # poll color attribute every few seconds, as it is currently not
         # transmitted on change
-        def poll_updates() -> None:
+        def poll_color_updates() -> None:
             for c in self._channels.values():
                 if not isinstance(c, VirtualChannel):
                     self._encoder.request_color(c)
 
         App.scheduler.execute_interval(
-            "poll_session_updates",
+            "poll_session_color_updates",
             max(
                 len(self._channels) * timing_config["session_poll_channel_multiplier"],
                 timing_config["session_poll_min"],
             ),
-            poll_updates,
+            poll_color_updates,
         )
+
+        # periodically poll other channel attributes if enabled
+        def poll_channel_updates() -> None:
+            App.settings.set_status("Init. update")
+            for c in self._channels.values():
+                if not isinstance(c, VirtualChannel):
+                    self._encoder.request_label(channel)
+                    self._encoder.request_mute(channel)
+                    self._encoder.request_level(channel)
+
+        if timing_config["channel_poll"] > 0:
+            App.scheduler.execute_interval(
+                "poll_session_channel_updates",
+                timing_config["channel_poll"],
+                poll_channel_updates,
+            )
 
         def hydrate_sends() -> None:
             grace_time = len(self.output_channels) * timing_config["hydration_grace_multiplier"]
