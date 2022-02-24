@@ -174,6 +174,7 @@ class Session:
 
         # initialize channels, do not sync sends
         App.settings.set_status("Syncing…")
+        timing_config = App.config.timing
 
         for channel in self._virtual:
             channel.unbind()
@@ -191,7 +192,7 @@ class Session:
 
             # wait some time - otherwise the stupid mixrack begins sending
             # nonsense at some point…
-            time.sleep(0.01)
+            time.sleep(timing_config["channel_init_grace"])
 
         # poll color attribute every few seconds, as it is currently not
         # transmitted on change
@@ -200,10 +201,17 @@ class Session:
                 if not isinstance(c, VirtualChannel):
                     self._encoder.request_color(c)
 
-        App.scheduler.execute_interval("poll_session_updates", max(len(self._channels) * 0.04, 4), poll_updates)
+        App.scheduler.execute_interval(
+            "poll_session_updates",
+            max(
+                len(self._channels) * timing_config["session_poll_channel_multiplier"],
+                timing_config["session_poll_min"],
+            ),
+            poll_updates,
+        )
 
         def hydrate_sends() -> None:
-            grace_time = len(self.output_channels) * 0.01
+            grace_time = len(self.output_channels) * timing_config["hydration_grace_multiplier"]
             print(f"Begin hydrating with grace interval of {round(grace_time, 2)}s…")
             App.settings.set_status("Hydrating…")
 

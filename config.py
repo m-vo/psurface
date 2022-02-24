@@ -86,6 +86,23 @@ class Config:
 
         return data
 
+    @property
+    def timing(self) -> dict:
+        data = copy(self._data["timing"])
+        self._enforce_keys(
+            data,
+            [
+                "channel_init_grace",
+                "hydration_grace_multiplier",
+                "session_poll_channel_multiplier",
+                "session_poll_min",
+                "ui_startup_delay",
+            ],
+            "timing",
+        )
+
+        return data
+
     @staticmethod
     def _enforce_keys(data: dict, keys: list, group: str) -> None:
         for key in keys:
