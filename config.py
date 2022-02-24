@@ -53,7 +53,6 @@ class Config:
                 "number_of_fx_returns",
                 # other
                 "virtual_start",
-                "last_output_bank_start",
                 "feedback_matrix",
             ],
             "control.tracking",
@@ -66,7 +65,6 @@ class Config:
             "mono_aux_start",
             "external_fx_start",
             "virtual_start",
-            "last_output_bank_start",
             "feedback_matrix",
         ]:
             data[key] -= 1

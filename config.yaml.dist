@@ -26,12 +26,12 @@ control:
     talk_to_stage: 66
 
     # aux channels
-    number_of_mono_aux: 4
+    number_of_mono_aux: 6
     mono_aux_start: 1
     number_of_stereo_aux: 1
 
     # external FX channels (via aux)
-    number_of_external_fx: 4
+    number_of_external_fx: 10
     external_fx_start: 7
 
     # fx channels
@@ -41,9 +41,6 @@ control:
 
     # first of 16 virtual input channels
     virtual_start: 101
-
-    # first input for output bank 6 (must be < number of inputs)
-    last_output_bank_start: 65
 
     # feedback matrix channel
     feedback_matrix: 1

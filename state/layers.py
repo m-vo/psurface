@@ -24,7 +24,6 @@ class LayerController:
         scene_config = App.config.control_scenes
         self._max_input_index = App.config.control_tracking["number_of_inputs"] - 1
         self._max_fx_return_index = App.config.control_tracking["number_of_fx_returns"] - 1
-        self._last_output_bank_start = App.config.control_tracking["last_output_bank_start"]
 
         self._scene_mixing_start = scene_config["mixing_start"]
         self._scene_virtual_left_start = scene_config["virtual_left_start"]
@@ -271,23 +270,11 @@ class LayerController:
                         break
 
         else:
-            if self._bank < 4:
-                # inputs from banks
-                channel_region_from = min(self._bank * 16, self._max_input_index)
-                channel_region_to = min(channel_region_from + 14, self._max_input_index)
+            # inputs from banks
+            channel_region_from = min(self._bank * 16, self._max_input_index)
+            channel_region_to = min(channel_region_from + 14, self._max_input_index)
 
-                bind_sends(self._session.input_channels, channel_region_from, channel_region_to)
-
-            elif self._bank == 4:
-                # fx returns
-                bind_sends(self._session.fx_returns, 0, min(14, self._max_fx_return_index))
-
-            elif self._bank == 5:
-                # inputs fixed
-                channel_region_from = self._last_output_bank_start
-                channel_region_to = min(channel_region_from + 14, self._max_input_index)
-
-                bind_sends(self._session.input_channels, channel_region_from, channel_region_to)
+            bind_sends(self._session.input_channels, channel_region_from, channel_region_to)
 
         # unused
         for unused_index in range(index, 15):
