@@ -47,6 +47,9 @@ class Decoder(Protocol):
             while handler_and_args := self._handlers_to_execute.popleft():
                 handler, args = handler_and_args
                 handler(*args)
+
+                App.tick_inbound_data()
+
         except IndexError:
             pass
 

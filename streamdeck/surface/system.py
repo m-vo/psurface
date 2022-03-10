@@ -40,6 +40,13 @@ class SystemSurface(Surface):
         App.settings.status_changed_event.append(update_status)
         update_status()
 
+        # listen to and display data status updates
+        def update_data_status(has_inbound_data: bool) -> None:
+            self._set_image(self.KEY_DATA_STATUS, self._render_data_status(has_inbound_data))
+
+        App.inbound_data_changed_event.append(update_data_status)
+        update_data_status(False)
+
     def init(self):
         super(SystemSurface, self).init()
 
@@ -246,5 +253,18 @@ class SystemSurface(Surface):
             font=ImageFont.truetype(self._assets["font"], 9),
             fill=(200, 200, 200),
         )
+
+        return image
+
+    def _render_data_status(self, has_inbound_data: bool) -> Image:
+        image = Image.new("RGB", self._deck.key_image_format()["size"], "black")
+
+        draw = ImageDraw.Draw(image)
+
+        color = ((50, 50, 50), "white")[has_inbound_data]
+
+        draw.line((20, 20, 20, 38), fill=color, width=2)
+        draw.line((15, 34, 20, 40), fill=color, width=2)
+        draw.line((25, 34, 20, 40), fill=color, width=2)
 
         return image

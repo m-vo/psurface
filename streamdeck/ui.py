@@ -56,6 +56,7 @@ class DeckUI:
 
     def init(self) -> None:
         App.settings.set_status("Running UI…")
+        App.monitor_inbound_data()
 
         all_surfaces = [self._system_surface, self._input_surface, self._output_surface]
 
