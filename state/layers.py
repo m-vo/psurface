@@ -181,6 +181,8 @@ class LayerController:
 
             self._session.route_feedback_to_output(None)
 
+            App.settings.disable_output_filter()
+
         elif self._scene_virtual_left_start <= scene < self._scene_virtual_left_start + 6:
             select_mode(self._MODE_OUTPUTS)
             self._bank = scene - self._scene_virtual_left_start

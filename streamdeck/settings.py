@@ -41,6 +41,11 @@ class GlobalSettings:
         self._output_filter = not self._output_filter
         self.filter_changed_event()
 
+    def disable_output_filter(self) -> None:
+        if self._output_filter:
+            self._output_filter = False
+            self.filter_changed_event()
+
     @property
     def status(self) -> str:
         return self._status
