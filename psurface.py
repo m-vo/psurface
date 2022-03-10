@@ -40,11 +40,14 @@ class PSurface:
         self._dlive_in = DLiveSocketPort()
 
     def run(self):
-        self._encoder.dispatch.append(self._dlive_in.send_bytes)
+        self._encoder.dispatch = self._dlive_in.send_bytes
         self._session.track_changes()
 
         # wait some time until the internal state has settled before initializing event bound ui
         App.scheduler.execute_delayed("run_ui", App.config.timing["ui_startup_delay"], self._ui.init)
+
+        # start the rate limiter late in the game so that we do not interfere with syncing
+        App.scheduler.execute_delayed("enable_rate_limiting", 30, self._dlive_in.enable_rate_limiting)
 
         for message in self._dlive_out:
             self._decoder.feed_message(message)

@@ -154,7 +154,7 @@ class Encoder(Protocol):
     def __init__(self):
         Protocol.__init__(self)
 
-        self.dispatch: Event = Event()  # data: list
+        self.dispatch: Callable = lambda x: True  # data: list
         self._write_lock = Lock()
         self._debug_active = False
 
@@ -173,7 +173,9 @@ class Encoder(Protocol):
             scene_offset,
         ]
 
-        self.dispatch(data)
+        if not self.dispatch(data):
+            print(f"Could not recall scene {scene} due to rate limiting.")
+
         return data
 
     def label(self, channel: Channel) -> list:
@@ -187,7 +189,9 @@ class Encoder(Protocol):
             0xF7,
         ]
 
-        self.dispatch(data)
+        if not self.dispatch(data):
+            print(f"Could not label channel {channel} due to rate limiting.")
+
         return data
 
     def request_label(self, channel: Channel) -> list:
@@ -200,7 +204,9 @@ class Encoder(Protocol):
             0xF7,
         ]
 
-        self.dispatch(data)
+        if not self.dispatch(data):
+            print(f"Could not request label of {channel} due to rate limiting.")
+
         return data
 
     def color(self, channel: Channel) -> list:
@@ -214,7 +220,9 @@ class Encoder(Protocol):
             0xF7,
         ]
 
-        self.dispatch(data)
+        if not self.dispatch(data):
+            print(f"Could not colorize channel {channel} due to rate limiting.")
+
         return data
 
     def request_color(self, channel: Channel) -> list:
@@ -227,7 +235,9 @@ class Encoder(Protocol):
             0xF7,
         ]
 
-        self.dispatch(data)
+        if not self.dispatch(data):
+            print(f"Could not request color of {channel} due to rate limiting.")
+
         return data
 
     def mute(self, channel: Channel) -> list:
@@ -239,7 +249,9 @@ class Encoder(Protocol):
             0x00,
         ]
 
-        self.dispatch(data)
+        if not self.dispatch(data):
+            print(f"Could not mute channel {channel} due to rate limiting.")
+
         return data
 
     def request_mute(self, channel: Channel) -> list:
@@ -253,7 +265,9 @@ class Encoder(Protocol):
             0xF7,
         ]
 
-        self.dispatch(data)
+        if not self.dispatch(data):
+            print(f"Could not request mute state of channel {channel} due to rate limiting.")
+
         return data
 
     def level(self, channel: Channel) -> list:
@@ -267,7 +281,9 @@ class Encoder(Protocol):
             channel.level,
         ]
 
-        self.dispatch(data)
+        if not self.dispatch(data):
+            print(f"Could not set level of channel {channel} due to rate limiting.")
+
         return data
 
     def request_level(self, channel: Channel) -> list:
@@ -282,7 +298,9 @@ class Encoder(Protocol):
             0xF7,
         ]
 
-        self.dispatch(data)
+        if not self.dispatch(data):
+            print(f"Could not request level of channel {channel} due to rate limiting.")
+
         return data
 
     def send_level(self, from_channel: InputChannel, to_channel: OutputChannel, level: Level) -> list:
@@ -298,7 +316,9 @@ class Encoder(Protocol):
             0xF7,
         ]
 
-        self.dispatch(data)
+        if not self.dispatch(data):
+            print(f"Could not set send level of channel {from_channel} -> {to_channel} due to rate limiting.")
+
         return data
 
     def request_send_level(self, from_channel: InputChannel, to_channel: OutputChannel) -> list:
@@ -315,5 +335,7 @@ class Encoder(Protocol):
             0xF7,
         ]
 
-        self.dispatch(data)
+        if not self.dispatch(data):
+            print(f"Could not request send level of channel {from_channel} -> {to_channel} due to rate limiting.")
+
         return data
