@@ -15,9 +15,12 @@ class SystemSurface(Surface):
     KEY_S_DCA = 0
     KEY_S_DCA_RESTORE = 1
     KEY_S_DCA_ACCEPT = 2
+    KEY_DATA_STATUS = 8
     KEY_STATUS = 9
     KEY_DIRECT_ACTION = 13
     KEY_HOME = 14
+
+    PREFIX = "sys"
 
     def __init__(
         self,

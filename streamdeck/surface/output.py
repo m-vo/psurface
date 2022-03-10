@@ -23,6 +23,8 @@ class OutputSurface(Surface):
     KEY_TALK_TO_STAGE = 30
     KEY_HOME = 31
 
+    PREFIX = "out"
+
     def __init__(
         self,
         device: StreamDeck,
@@ -127,7 +129,7 @@ class OutputSurface(Surface):
         channel = self._fragment_renderer.get_channel(key)
 
         if isinstance(channel, OutputChannel) and channel.is_visible:
-            self._layer_controller.select_output(channel)
+            self._execute_throttled(lambda: self._layer_controller.select_output(channel))
 
     def _on_key_down_long(self, key: int) -> None:
         super()._on_key_down_long(key)

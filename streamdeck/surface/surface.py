@@ -2,6 +2,7 @@ import os
 from abc import ABC
 from typing import Tuple
 
+import typing
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 from PIL.ImageDraw import Draw
 from StreamDeck.Devices import StreamDeck
@@ -17,6 +18,11 @@ from streamdeck.util import FragmentRenderer
 
 class Surface(ABC):
     KEY_HOME: int
+    PREFIX: ""
+
+    _throttling_duration = App.config.timing["button_throttling"]
+    _throttling_active: bool = False
+    _throttling_next: typing.Optional[typing.Callable] = None
 
     def __init__(
         self,
@@ -53,11 +59,11 @@ class Surface(ABC):
                     self._on_key_down_long(key)
                     return
 
-                App.scheduler.execute_delayed("key_" + repr(key), 1.0, self._on_key_down_long, [key])
+                App.scheduler.execute_delayed(self.PREFIX + "_key_" + repr(key), 1.0, self._on_key_down_long, [key])
 
                 self._on_key_down(key)
             else:
-                if not App.scheduler.cancel("key_" + repr(key)):
+                if not App.scheduler.cancel(self.PREFIX + "_key_" + repr(key)):
                     #  skip handler if job was already executed (_on_key_down_long)
                     return
 
@@ -78,12 +84,30 @@ class Surface(ABC):
         self._layer_controller.selection_update_event.append(render_home_button)
         render_home_button()
 
+    def _execute_throttled(self, handler: typing.Callable) -> None:
+        if Surface._throttling_active:
+            self._throttling_next = handler
+
+            return
+
+        Surface._throttling_active = True
+
+        def unlock() -> None:
+            if self._throttling_next:
+                self._throttling_next()
+                self._throttling_next = None
+
+            Surface._throttling_active = False
+
+        App.scheduler.execute_delayed("ui_throttle_unlock", Surface._throttling_duration, unlock)
+        handler()
+
     def _on_key_down(self, key: int):
         pass
 
     def _on_key_up(self, key: int):
         if key == self.KEY_HOME:
-            self._layer_controller.select_mixing()
+            self._execute_throttled(self._layer_controller.select_mixing)
 
     def _on_key_down_long(self, key: int):
         pass

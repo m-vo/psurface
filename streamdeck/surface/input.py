@@ -8,6 +8,8 @@ from streamdeck.util import ChannelPacking
 class InputSurface(Surface):
     KEY_HOME = 31
 
+    PREFIX = "in"
+
     def init(self):
         super(InputSurface, self).init()
 
@@ -38,7 +40,7 @@ class InputSurface(Surface):
         channel = self._fragment_renderer.get_channel(key)
 
         if isinstance(channel, InputChannel) and channel.is_visible:
-            self._layer_controller.select_input(channel)
+            self._execute_throttled(lambda: self._layer_controller.select_input(channel))
 
     def _on_key_down_long(self, key: int) -> None:
         super()._on_key_down_long(key)
