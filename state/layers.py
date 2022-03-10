@@ -174,8 +174,10 @@ class LayerController:
             App.settings.set_status(f"Mixing | Bank {self._bank + 1}")
             self._select_exclusively(None)
 
-            for virtual_channel in self._session.virtual_channels:
-                virtual_channel.unbind()
+            # todo: see if we can re-enable this in the future once the throttling
+            #       issue is resolved
+            # for virtual_channel in self._session.virtual_channels:
+            #     virtual_channel.unbind()
 
             self._session.route_feedback_to_output(None)
 
