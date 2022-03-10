@@ -178,6 +178,7 @@ class Session:
 
         for channel in self._virtual:
             channel.unbind()
+            time.sleep(timing_config["channel_init_grace"])
 
         self.route_feedback_to_output(None)
         self.virtual_feedback_channel.set_mute(False)
@@ -200,6 +201,7 @@ class Session:
             for c in self._channels.values():
                 if not isinstance(c, VirtualChannel):
                     self._encoder.request_color(c)
+                    time.sleep(timing_config["channel_init_grace"])
 
         App.scheduler.execute_interval(
             "poll_session_color_updates",
