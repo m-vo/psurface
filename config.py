@@ -98,6 +98,8 @@ class Config:
                 "session_poll_min",
                 "channel_poll",
                 "ui_startup_delay",
+                "button_throttling",
+                "outbound_capacity_limit",
             ],
             "timing",
         )
