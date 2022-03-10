@@ -15,6 +15,8 @@ from streamdeck.ui import DeckUI
 
 class PSurface:
     def __init__(self):
+        print(f"\nRunning pSurface version '{App.version}'.\n")
+
         def print_status() -> None:
             print(App.settings.status)
 
