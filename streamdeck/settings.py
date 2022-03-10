@@ -18,7 +18,7 @@ class GlobalSettings:
         return self._brightness
 
     def set_default_brightness(self) -> None:
-        self._brightness = 2
+        self._brightness = 4
         self.brightness_changed_event()
 
     def increase_brightness(self) -> None:
