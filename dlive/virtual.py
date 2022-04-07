@@ -72,7 +72,7 @@ class LayerController:
         # dLive director does not show the correct state for the bank indicator
         # (LED not lit even if matching scene was recalled)
         if self._mode != LayerMode.OUTPUTS and self._dlive.get_scene() != self._scene_virtual_right:
-            self._on_scene_change(self._scene_virtual_right)
+            self._dlive.change_scene(self._scene_virtual_right)
 
         self._call_scene_or_handler(self._scene_virtual_left_start.with_offset(self._bank))
 
