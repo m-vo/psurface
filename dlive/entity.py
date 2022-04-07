@@ -1,11 +1,6 @@
 import re
 import typing
-from copy import copy
 from enum import Enum
-from threading import Lock, Thread
-
-from app import App
-from common.event import Event
 
 
 def _make_bank_lookups(bank_map: dict) -> tuple:
@@ -25,29 +20,32 @@ class Color(Enum):
     Channel color
     """
 
-    OFF = 0x00, (0x20, 0x20, 0x20)
-    RED = 0x01, (0xFF, 0x00, 0x00)
-    GREEN = 0x02, (0x00, 0xFF, 0x00)
-    YELLOW = 0x03, (0xFF, 0xFF, 0x00)
-    BLUE = 0x04, (0x00, 0x00, 0xFF)
-    PURPLE = 0x05, (0xAA, 0x00, 0xAA)
-    LIGHT_BLUE = 0x06, (0x00, 0xFF, 0xFF)
-    WHITE = 0x07, (0xFF, 0xFF, 0xFF)
+    OFF = 0x00
+    RED = 0x01
+    GREEN = 0x02
+    YELLOW = 0x03
+    BLUE = 0x04
+    PURPLE = 0x05
+    LIGHT_BLUE = 0x06
+    WHITE = 0x07
 
-    def __new__(cls, *args, **kwds):
-        obj = object.__new__(cls)
-        obj._value_ = args[0]
-        return obj
-
-    def __init__(self, _: str, rgb: typing.Tuple[int, int, int]):
-        self._rgb_ = rgb
+    _rgb = {
+        0x00: (0x20, 0x20, 0x20),
+        0x01: (0xFF, 0x00, 0x00),
+        0x02: (0x00, 0xFF, 0x00),
+        0x03: (0xFF, 0xFF, 0x00),
+        0x04: (0x00, 0x00, 0xFF),
+        0x05: (0xAA, 0x00, 0xAA),
+        0x06: (0x00, 0xFF, 0xFF),
+        0x07: (0xFF, 0xFF, 0xFF),
+    }
 
     def __str__(self):
         return self.name
 
     @property
     def rgb(self):
-        return self._rgb_
+        return self._rgb.value[self.value]
 
 
 class Level(int):
@@ -76,6 +74,33 @@ class Level(int):
         dbu = ((value - 17) * 55 / 110) - 45
 
         return "{0:+}".format(int(dbu))
+
+
+class Scene(int):
+    def with_offset(self, offset: int) -> "Scene":
+        return Scene(self + offset)
+
+    def __str__(self) -> str:
+        return "s{}".format(int(self) + 1)
+
+
+class Label(str):
+    def with_bind_send_prefix(self) -> "Label":
+        return Label("@" + self)
+
+    def with_bind_master_prefix(self) -> "Label":
+        return Label("M" + self)
+
+    @property
+    def has_name(self) -> bool:
+        return not re.match(r"^[0-9]*$", self)
+
+    @property
+    def is_suppressed_in_overview(self) -> bool:
+        return len(self) > 0 and self[0] == "!"
+
+    def __new__(cls, value: str = ""):
+        return str.__new__(cls, value[:8].strip())
 
 
 class Bank(Enum):
@@ -194,464 +219,16 @@ class ChannelIdentifier:
     def __str__(self):
         return "{}#{} {{ N_base={}, CH={} }}".format(
             self.bank.name,
-            self.canonical_index,
+            self.canonical_index + 1,
             self.midi_bank_offset,
             self.midi_channel_index,
         )
 
-    def __eq__(self, other: "ChannelIdentifier"):
-        return other is not None and self._bank == other._bank and self._canonical_index == other._canonical_index
+    def __repr__(self):
+        return self.__str__()
+
+    def __eq__(self, other):
+        return other is not None and (self._bank, self._canonical_index) == (other._bank, other._canonical_index)
 
     def __hash__(self):
         return hash((self._bank, self._canonical_index))
-
-
-class Channel:
-    """
-    Basic channel entity, that implements a property observer pattern: setting values will trigger the respective
-    change event if the value differs from the internal state.
-    """
-
-    def __init__(self, identifier: ChannelIdentifier):
-        self._identifier: ChannelIdentifier = identifier
-
-        self._label: str = ""
-        self._color: Color = Color.OFF
-        self._mute: bool = False
-        self._level: Level = Level()
-
-        self._selected: bool = False
-
-        # Change events
-        self.label_changed_event: Event = Event()
-        self.color_changed_event: Event = Event()
-        self.mute_changed_event: Event = Event()
-        self.level_changed_event: Event = Event()
-        self.select_changed_event: Event = Event()
-
-        # Lock
-        self._update_lock = Lock()
-
-    @property
-    def identifier(self):
-        return self._identifier
-
-    @property
-    def label(self):
-        return self._label
-
-    @property
-    def color(self):
-        return self._color
-
-    @property
-    def mute(self):
-        return self._mute
-
-    @property
-    def level(self):
-        return self._level
-
-    @property
-    def is_visible(self) -> bool:
-        return not re.match(r"^[0-9]*$", self._label)
-
-    @property
-    def selected(self) -> bool:
-        return self._selected
-
-    def set_label(self, label: str, trigger_change_event: bool = True) -> bool:
-        label = label[:8].strip()
-
-        if self._label == label:
-            return False
-
-        if trigger_change_event:
-            channel = copy(self)
-            channel._label = label
-            self.label_changed_event(channel)
-
-        self._label = label
-        return True
-
-    def set_color(self, color: Color, trigger_change_event: bool = True) -> bool:
-        if self._color == color:
-            return False
-
-        if trigger_change_event:
-            channel = copy(self)
-            channel._color = color
-            self.color_changed_event(channel)
-
-        self._color = color
-        return True
-
-    def set_mute(self, enabled: bool, trigger_change_event: bool = True) -> bool:
-        if self._mute == enabled:
-            return False
-
-        if trigger_change_event:
-            channel = copy(self)
-            channel._mute = enabled
-            self.mute_changed_event(channel)
-
-            return False
-
-        self._mute = enabled
-        return True
-
-    def set_level(self, level: Level, trigger_change_event: bool = True) -> bool:
-        if self._level == level:
-            return False
-
-        if trigger_change_event:
-            channel = copy(self)
-            channel._level = level
-            self.level_changed_event(channel)
-
-        self._level = level
-        return True
-
-    def select(self, state: bool = True, trigger_change_event: bool = True) -> bool:
-        if self._selected == state:
-            return False
-
-        self._selected = state
-
-        if trigger_change_event:
-            self.select_changed_event(self)
-
-        return True
-
-    def __str__(self):
-        return 'Channel {} "{}"'.format(
-            self._identifier,
-            self._label,
-        )
-
-    def __eq__(self, other: "Channel"):
-        return other is not None and self._identifier == other._identifier
-
-    def __hash__(self):
-        return hash(self._identifier)
-
-
-class OutputChannel(Channel):
-    pass
-
-
-class InputChannel(Channel):
-    def __init__(self, identifier: ChannelIdentifier, hydrate_sends_callback: typing.Optional[typing.Callable] = None):
-        super(InputChannel, self).__init__(identifier)
-
-        self._sends: typing.Dict[int, typing.Tuple[Level, OutputChannel]] = {}
-        self._sends_snapshot: typing.Dict[int, typing.Tuple[Level, OutputChannel]] = {}
-        self._affected_by_s_dca: typing.Set[int] = set()
-
-        self.send_level_changed_event: Event = Event()
-        self.s_dca_changed_event: Event = Event()
-
-        self._hydrate_sends_lock = Lock()
-        self._sends_hydrated: bool = False
-        self._hydrate_sends_callback: typing.Callable = hydrate_sends_callback
-
-    @property
-    def send_channels(self) -> typing.List[OutputChannel]:
-        return list(map(lambda t: t[1], self._sends.values()))
-
-    def hydrate_sends(self) -> bool:
-        if not self._hydrate_sends_lock.acquire(timeout=1.0):
-            return False
-
-        if not self._sends_hydrated and self._hydrate_sends_callback:
-            self._hydrate_sends_callback(self)
-            self._sends_hydrated = True
-            print(f"Hydrated sends of {self.identifier.short_label()}")
-
-        now_hydrated = self._sends_hydrated
-        self._hydrate_sends_lock.release()
-
-        return now_hydrated
-
-    def get_send_level(self, to_channel: OutputChannel) -> typing.Optional[Level]:
-        self.hydrate_sends()
-        hash_index = to_channel.identifier.__hash__()
-
-        if hash_index not in self._sends:
-            return None
-
-        return self._sends[hash_index][0]
-
-    def set_send_level(
-        self,
-        to_channel: "OutputChannel",
-        level: Level = Level(0),
-        trigger_change_event: bool = True,
-    ) -> bool:
-        hash_index = to_channel.identifier.__hash__()
-
-        if hash_index in self._sends and self._sends[hash_index][0] == level:
-            return False
-
-        self._sends[hash_index] = (level, to_channel)
-
-        if trigger_change_event:
-            self.send_level_changed_event(self, to_channel, level)
-
-        return True
-
-    def backup_sends(self) -> None:
-        """Create snapshot of the current send levels."""
-        with self._hydrate_sends_lock:
-            if self._sends_hydrated:
-                self._sends_snapshot = copy(self._sends)
-
-    def restore_sends(self) -> None:
-        """Restore send levels from the snapshot and clear 'affected by s_dca' state."""
-        if len(self._sends_snapshot) == 0:
-            App.settings.set_status(f"Restore fail | {self.identifier.short_label()}")
-            return
-
-        for hash_index, level_output in self._sends_snapshot.items():
-            level, to_channel = level_output
-
-            if (
-                hash_index in self._sends
-                and to_channel.identifier.__hash__() in self._affected_by_s_dca
-                and self._sends[hash_index][0] != level
-            ):
-                self._sends[hash_index] = (level, to_channel)
-                self.send_level_changed_event(self, to_channel, level)
-
-        self._affected_by_s_dca.clear()
-        self.s_dca_changed_event(self)
-
-    def drop_sends_backup(self) -> None:
-        """Accept current send levels and drop the snapshot."""
-        self._sends_snapshot = {}
-        self._affected_by_s_dca.clear()
-
-        self.s_dca_changed_event(self)
-
-    def mark_affected_by_s_dca(self, with_channel: OutputChannel) -> None:
-        hash_identifier = with_channel.identifier.__hash__()
-        promote_change = hash_identifier not in self._affected_by_s_dca
-        self._affected_by_s_dca.add(hash_identifier)
-
-        if promote_change:
-            self.s_dca_changed_event(self)
-
-    @property
-    def affected_by_s_dca(self) -> bool:
-        return len(self._affected_by_s_dca) > 0
-
-
-class MultiChannel(InputChannel, OutputChannel):
-    pass
-
-
-class VirtualChannel(OutputChannel):
-    """
-    A virtual channel tracks the (send) levels of another channel.
-    This mapping can be dynamically changed at runtime.
-    """
-
-    _MODE_NONE = -1
-    _MODE_TIE_TO_ZERO = 0
-    _MODE_TRACK_SEND_LEVEL = 1
-    _MODE_TRACK_MASTER_LEVEL = 2
-    _MODE_SEND_DCA = 3
-
-    def __init__(self, identifier: ChannelIdentifier):
-        super(VirtualChannel, self).__init__(identifier)
-
-        self._channel_base: typing.Optional[InputChannel] = None
-        self._channel_send: typing.Optional[OutputChannel] = None
-        self._affected_s_dca_channels: typing.List[typing.Tuple[InputChannel, Level]] = []
-
-        self._mode = self._MODE_NONE
-
-    def bind_send(self, base_channel: InputChannel, to_channel: OutputChannel, inverse: bool = False) -> bool:
-        """Track the send level to a given output of a given base channel."""
-        level = base_channel.get_send_level(to_channel)
-
-        # reject if send levels are not settled
-        if level is None:
-            App.settings.set_status("Not synced | Try again")
-            print(f"Send levels of {base_channel.identifier.short_label()} are not fully settled, yet.")
-
-            return False
-
-        with self._update_lock:
-            self._mode = self._MODE_TRACK_SEND_LEVEL
-            self._channel_base = base_channel
-            self._channel_send = to_channel
-            self._affected_s_dca_channels = []
-
-        # set label and color from target/base channel
-        if not inverse:
-            self.set_label(f"@{to_channel.label}")
-            self.set_color(to_channel.color)
-        else:
-            self.set_label(f"@{base_channel.label}")
-            self.set_color(base_channel.color)
-
-        # initialize fader level
-        self.set_level(level)
-        self.set_mute(False)
-
-        return True
-
-    def bind_s_dca(self, base_channels: typing.List[InputChannel], to_channel: OutputChannel) -> bool:
-        """Simultaneously track a send level to a given output on multiple base channels."""
-        affected_s_dca_channels = list(
-            zip(
-                base_channels,
-                map(lambda c: c.get_send_level(to_channel), base_channels),
-            )
-        )
-
-        # reject if any send levels are not settled
-        if None in list(map(lambda x: x[1], self._affected_s_dca_channels)):
-            App.settings.set_status("Not synced | Try again")
-            print(f"Send levels to {to_channel.identifier.short_label()} are not fully settled, yet.")
-
-            return False
-
-        with self._update_lock:
-            self._mode = self._MODE_SEND_DCA
-            self._channel_base = None
-            self._channel_send = to_channel
-            self._affected_s_dca_channels = affected_s_dca_channels
-
-            # backup sends
-            for channel in base_channels:
-                if not channel.affected_by_s_dca:
-                    channel.backup_sends()
-
-        # set label and color from send channel
-        self.set_label(f"@{to_channel.label}")
-        self.set_color(to_channel.color)
-        self.set_mute(False)
-
-        # initialize fader level at midpoint
-        self.set_level(Level(Level.VALUE_FADER_MIDPOINT))
-
-        return True
-
-    def bind_master(self, base_channel: OutputChannel) -> None:
-        """Copy the base channel"""
-        with self._update_lock:
-            self._mode = self._MODE_TRACK_MASTER_LEVEL
-            self._channel_base = base_channel
-            self._channel_send = None
-            self._affected_s_dca_channels = []
-
-        # set label and color from base channel
-        self.set_label(f"M {base_channel.label}")
-        self.set_color(base_channel.color)
-
-        # initialize fader + mute
-        self.set_level(base_channel.level)
-        self.set_mute(base_channel.mute)
-
-    def tie_to_zero(self) -> None:
-        """Make the fader stick to the -inf/bottom position."""
-        with self._update_lock:
-            self._mode = self._MODE_TIE_TO_ZERO
-            self._channel_base = None
-            self._channel_send = None
-            self._affected_s_dca_channels = []
-
-        self.set_label("")
-        self.set_color(Color.OFF)
-        self.set_mute(False)
-
-        self.set_level(Level(0))
-
-    def unbind(self) -> None:
-        """Reset and unbind this virtual channel."""
-        with self._update_lock:
-            self._mode = self._MODE_NONE
-            self._channel_base = None
-            self._channel_send = None
-            self._affected_s_dca_channels = []
-
-        self.set_label("[V-Ch]")
-        self.set_color(Color.OFF)
-        self.set_mute(True)
-
-        self.set_level(Level(0))
-
-    def set_level(self, level: Level, trigger_change_event: bool = True) -> bool:
-        track_level_change = super(VirtualChannel, self).set_level(level, trigger_change_event)
-
-        # Handle modes
-        if track_level_change:
-            if self._mode == self._MODE_TIE_TO_ZERO:
-                if level > 0:
-                    self.set_level(Level(0))
-            elif self._mode == self._MODE_SEND_DCA and self._channel_send:
-                self._apply_s_dca_values(level)
-            elif self._mode == self._MODE_TRACK_SEND_LEVEL and self._channel_base and self._channel_send:
-                self._channel_base.set_send_level(self._channel_send, level)
-            elif self._mode == self._MODE_TRACK_MASTER_LEVEL and self._channel_base:
-                self._channel_base.set_level(level)
-
-        return track_level_change
-
-    def set_mute(self, enabled: bool, trigger_change_event: bool = True) -> bool:
-        track_mute_change = super().set_mute(enabled, trigger_change_event)
-
-        # Handle modes
-        if track_mute_change:
-            if self._mode in [self._MODE_TRACK_SEND_LEVEL, self._MODE_SEND_DCA, self._MODE_TIE_TO_ZERO]:
-                if enabled:
-                    self.set_mute(False)
-            elif self._mode == self._MODE_NONE:
-                if not enabled:
-                    self.set_mute(True)
-            elif self._mode == self._MODE_TRACK_MASTER_LEVEL and self._channel_base:
-                self._channel_base.set_mute(enabled)
-
-        return track_mute_change
-
-    def _apply_s_dca_values(self, level: Level) -> None:
-        if level == Level(Level.VALUE_FADER_MIDPOINT):
-            return
-
-        for channel, base_level in self._affected_s_dca_channels:
-            try:
-                # sanity check against race conditions
-                # todo: Consider moving value logic to Level entity
-                if level == Level.VALUE_OFF:
-                    new_level = Level(Level.VALUE_OFF)
-
-                elif base_level <= Level.VALUE_AUDIBLE_MINIMUM and level < Level.VALUE_FADER_MIDPOINT:
-                    new_level = Level(Level.VALUE_OFF)
-
-                else:
-                    if level >= Level.VALUE_FADER_MIDPOINT:
-                        diff = (
-                            (Level.VALUE_FULL - base_level)
-                            * (level - Level.VALUE_FADER_MIDPOINT)
-                            / (Level.VALUE_FULL - Level.VALUE_FADER_MIDPOINT)
-                        )
-
-                    else:
-                        diff = (
-                            (Level.VALUE_AUDIBLE_MINIMUM - base_level)
-                            * (Level.VALUE_FADER_MIDPOINT - level)
-                            / (Level.VALUE_FADER_MIDPOINT - Level.VALUE_OFF)
-                        )
-
-                    new_level = Level(base_level + int(diff))
-
-                # set level changes from new thread, so there is no waiting induced
-                Thread(target=channel.set_send_level, args=[self._channel_send, new_level]).start()
-
-                channel.mark_affected_by_s_dca(self._channel_send)
-
-            except AttributeError:
-                # protect against race conditions
-                pass

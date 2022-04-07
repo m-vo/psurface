@@ -1,56 +1,128 @@
 #!python
 
 import logging
-import os
 import sys
-import time
 
 from app import App
+from dlive.api import DLive
 from dlive.connection import DLiveSocketPort
-from dlive.encoding import Decoder, Encoder
-from state.layers import LayerController
-from state.session import Session
-from streamdeck.ui import DeckUI
+from dlive.entity import Scene
+from dlive.value import TrackedValue
+from dlive.virtual import LayerController
+from streamdeck.ui import UI
 
 
 class PSurface:
-    def __init__(self):
-        print(f"\nRunning pSurface version '{App.version}'.\n")
-
-        def print_status() -> None:
-            print(App.settings.status)
-
-        App.settings.status_changed_event.append(print_status)
-
-        # Internal state
-        self._encoder = Encoder()
-        self._decoder = Decoder()
-        self._session = Session(self._decoder, self._encoder)
-        self._layer_controller = LayerController(self._session)
-
-        # Connect to decks
-        App.settings.set_status("Finding decks…")
-        self._ui = DeckUI(self._session, self._layer_controller)
-
-        # We're using separate connections so that we can monitor our own
-        # commands. The mix rack would for instance not respond with a program
-        # change message on the connection where a scene recall was issued
-        App.settings.set_status("Connecting to mixrack…")
-        self._dlive_out = DLiveSocketPort()
-        self._dlive_in = DLiveSocketPort()
-
     def run(self):
-        self._encoder.dispatch = self._dlive_in.send_bytes
-        self._session.track_changes()
+        def print_help():
+            print("Supported commands")
+            print("------------------")
+            print("  Global")
+            print("    ?      Print this help")
+            print("    d      Dump the internal state")
+            print("    r      Perform a full resync")
+            print("    s<n>   Recall scene n, e.g. 's100'")
+            print()
+            print("  Mode of operation")
+            print("    i<n>   Select input n, e.g. 'i42'")
+            print("    o<n>   Select send/fx n, e.g. 'o3'")
+            print("    m      Select mixing mode")
+            print("    f      Toggle channel filter")
+            print("    x      Toggle sends target (Aux/FX)")
+            print()
 
-        # wait some time until the internal state has settled before initializing event bound ui
-        App.scheduler.execute_delayed("run_ui", App.config.timing["ui_startup_delay"], self._ui.init)
+        def print_notification(message: str):
+            print(f"> {message}")
 
-        # start the rate limiter late in the game so that we do not interfere with syncing
-        App.scheduler.execute_delayed("enable_rate_limiting", 30, self._dlive_in.enable_rate_limiting)
+        print(f"pSurface version {App.version}\n")
+        App.on_notify.append(print_notification)
 
-        for message in self._dlive_out:
-            self._decoder.feed_message(message)
+        # Find streamdecks
+        print("Finding devices…", end="")
+        ui = UI()
+        if ui.find_devices():
+            print(" [OK]")
+
+        # Establish mixrack connection
+        print("Establishing connection…", end="")
+        dlive = DLive(DLiveSocketPort(), DLiveSocketPort())
+        print(" [OK]")
+
+        # Init state and sync
+        print("Syncing…", end="")
+        dlive.sync()
+        layer_controller = LayerController(dlive)
+        print(" [OK]")
+
+        # Start UI
+        print("Initializing UI…", end="")
+        ui.initialize_ui(dlive, layer_controller)
+        print(" [OK]")
+
+        print("\nReady for some music!\nType ? and press [Enter] for a list of commands.\n")
+
+        # CLI control loop
+        while True:
+            user_input = input("")
+            length = len(user_input)
+            if length == 0:
+                continue
+
+            if user_input == "?":
+                print_help()
+                continue
+
+            if user_input == "d":
+                App.notify(dlive.__str__())
+                continue
+
+            if user_input == "r":
+                App.notify("Resetting state and syncing …")
+                TrackedValue.purge_all(0)
+                dlive.sync()
+                App.notify("Resync complete")
+                continue
+
+            if user_input == "m":
+                App.notify("Select mixing mode")
+                layer_controller.select_mixing_mode()
+                continue
+
+            if user_input == "f":
+                App.notify("Toggle channel filter")
+                layer_controller.toggle_channel_filter()
+                continue
+
+            if user_input == "x":
+                App.notify("Toggle sends target")
+                layer_controller.toggle_sends_target()
+                continue
+
+            if length < 2:
+                continue
+
+            try:
+                number = int(user_input[1:])
+            except ValueError:
+                continue
+
+            if user_input[0] == "s" and 0 < number <= 500:
+                scene = Scene(number - 1)
+                App.notify(f"Recall scene {scene}")
+                dlive.change_scene(scene)
+                continue
+
+            if user_input[0] == "i" and 0 < number <= len(channels := dlive.input_channels):
+                channel = channels[number - 1]
+                App.notify(f"Select input channel {channel.short_label()}")
+                layer_controller.select_input(channel)
+                continue
+
+            if user_input[0] == "o" and 0 < number <= len(channels := dlive.output_channels):
+                channel = channels[number - 1]
+                App.notify(f"Select output channel {channel.short_label()}")
+                layer_controller.select_output(channel)
+                continue
 
 
 def main():

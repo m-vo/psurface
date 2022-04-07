@@ -1,7 +1,10 @@
+import sys
 from copy import copy
-from typing import Optional
+from typing import Optional, List
 
 import yaml
+
+from dlive.entity import Color
 
 
 class Config:
@@ -25,10 +28,18 @@ class Config:
 
     @property
     def streamdeck_devices(self) -> dict:
-        data = copy(self._data["streamdeck"]["devices"])
+        data = copy(self._data["ui"]["streamdeck_devices"])
         self._enforce_keys(data, ["system", "input", "output"], "streamdeck.devices")
 
         return data
+
+    @property
+    def input_colors(self) -> List[Color]:
+        return self._parse_color_values(self._data["ui"]["color_listing"]["input"], "ui.color_listing.input")
+
+    @property
+    def output_colors(self) -> List[Color]:
+        return self._parse_color_values(self._data["ui"]["color_listing"]["output"], "ui.color_listing.output")
 
     @property
     def control_tracking(self) -> dict:
@@ -50,7 +61,6 @@ class Config:
                 # fx
                 "number_of_mono_fx",
                 "number_of_stereo_fx",
-                "number_of_fx_returns",
                 # other
                 "virtual_start",
                 "feedback_matrix",
@@ -84,32 +94,23 @@ class Config:
         for key in data:
             data[key] -= 1
 
-        return data
-
-    @property
-    def timing(self) -> dict:
-        data = copy(self._data["timing"])
-        self._enforce_keys(
-            data,
-            [
-                "channel_init_grace",
-                "hydration_grace_multiplier",
-                "session_poll_channel_multiplier",
-                "session_poll_min",
-                "channel_poll",
-                "ui_startup_delay",
-                "button_throttling",
-                "outbound_capacity_limit",
-            ],
-            "timing",
-        )
-
+        # todo: directly validate and return a List[Scene] instead
         return data
 
     @staticmethod
     def _enforce_keys(data: dict, keys: list, group: str) -> None:
         for key in keys:
             if key not in data:
-                raise RuntimeError(f"Invalid config - missing config key: '{key}' in '{group}'")
+                raise ConfigError(f"Missing config key: '{key}' in '{group}'.")
 
-        pass
+    @staticmethod
+    def _parse_color_values(input: str, group: str) -> List[Color]:
+        try:
+            return [Color[value.strip().upper()] for value in input.split(",")]
+        except KeyError:
+            raise ConfigError(f"Invalid color '{sys.exc_info()[1]}' in {group}.")
+
+
+class ConfigError(Exception):
+    def __init__(self, message: str) -> None:
+        super().__init__(f"Config error: {message}")

@@ -1,163 +1,167 @@
-from threading import Thread
-from typing import Callable, Dict, List, Optional, Tuple
+from collections import OrderedDict
+from queue import Queue
+from threading import Lock, Thread
+from typing import List, Callable, Dict, Optional
 
-from dlive.entity import Channel, Color, OutputChannel
-
-
-class FragmentRenderer:
-    def __init__(self):
-        self._key_and_action_by_identifier_hash: Dict[int, Tuple[int, Callable]] = {}
-        self._channels_by_key = {}
-
-    def reset(self) -> None:
-        self._key_and_action_by_identifier_hash = {}
-        self._channels_by_key = {}
-
-    def add_fragment(self, key: int, channel: Channel, render_action: Callable) -> None:
-        self._key_and_action_by_identifier_hash[channel.identifier.__hash__()] = (
-            key,
-            render_action,
-        )
-        self._channels_by_key[key] = channel
-
-    def update(self, channel: Channel) -> None:
-        hash_index = channel.identifier.__hash__()
-
-        if hash_index not in self._key_and_action_by_identifier_hash:
-            return
-
-        key, action = self._key_and_action_by_identifier_hash[hash_index]
-        self._execute_action(action, key)
-
-    def get_channel(self, key: int) -> Optional[Channel]:
-        if key not in self._channels_by_key:
-            return None
-
-        return self._channels_by_key[key]
-
-    def _execute_action(self, action: Callable, key: int) -> None:
-        action(key, self._channels_by_key[key])
-
-        # action_thread = Thread(target=action, args=(key, self._channels_by_key[key]))
-        # action_thread.start()
+from dlive.api import DLive
+from dlive.entity import ChannelIdentifier, Color
+from dlive.virtual import LayerController
 
 
-class ChannelPacking:
-    @staticmethod
-    def get_color_packing(channels: List[Channel], size: int = 32) -> Dict[int, Channel]:
-        channels_by_color = {
-            Color.BLUE: [],
-            Color.LIGHT_BLUE: [],
-            Color.YELLOW: [],
-            Color.RED: [],
-            Color.GREEN: [],
-            Color.PURPLE: [],
-        }
+class RenderQueue(Queue):
+    def start_worker(self):
+        renderer = Thread(target=self._dispatch)
+        renderer.start()
 
-        for channel in channels:
-            if channel.color not in [Color.OFF, Color.WHITE] and channel.is_visible:
-                channels_by_color[channel.color].append(channel)
+    def put_handler(self, handler: Callable, key: int) -> None:
+        with self.mutex:
+            drop_existing = None
+            for index, (h, k) in enumerate(self.queue):
+                if k == key:
+                    drop_existing = index
+                    break
+            if drop_existing is not None:
+                del self.queue[index]
 
-        def pack(avoid_break: bool = True, leave_space: bool = True) -> Dict[int, Channel]:
-            index = 0
-            pack_map: Dict[int, Channel] = {}
+        self.put((handler, key))
 
-            for channel_block in channels_by_color.values():
-                space_8 = 8 - index % 8
-                length = len(channel_block)
+    def _dispatch(self):
+        while True:
+            handler, key = self.get()
+            handler(key)
+            self.task_done()
 
-                if avoid_break and 8 >= length > space_8:
-                    index += space_8
 
-                for channel in channel_block:
-                    pack_map[index] = channel
-                    index += 1
+class ChannelRenderer:
+    def __init__(self, dlive: DLive, layer_controller: LayerController, length: int = 32) -> None:
+        self._dlive = dlive
+        self._length = length
 
-                if leave_space and length > 0 and index % 8 != 0:
-                    index += 1
+        self._layout_lock = Lock()
+        self._handlers: Dict[ChannelIdentifier, Callable] = {}
+        self._display_map: List[Optional[ChannelIdentifier]] = [None] * length
+        self._render_queue: RenderQueue = RenderQueue()
 
-            return pack_map
+        self._render_queue.start_worker()
 
-        # avoid bank breaks
-        pack_map = pack()
+        self._selected_channel: [Optional[ChannelIdentifier]] = None
+        layer_controller.on_selection_changed.append(self._on_update_channel_selection)
 
-        if len(pack_map) == 0:
-            return pack_map
+    def _on_update_color(self, channel: ChannelIdentifier, _) -> None:
+        if channel in self._display_map:
+            self._render_queue.put_handler(self._handlers[channel], self._display_map.index(channel))
 
-        # fall back to not leaving space
-        if max(pack_map) >= size:
-            pack_map = pack(leave_space=False)
+    def _on_update_label(self, channel: ChannelIdentifier, _) -> None:
+        if channel in self._display_map:
+            self._render_queue.put_handler(self._handlers[channel], self._display_map.index(channel))
 
-        # fall back to dense packing
-        if max(pack_map) >= size:
-            pack_map = pack(avoid_break=False, leave_space=False)
+    def _on_update_mute(self, channel: ChannelIdentifier, _) -> None:
+        if channel in self._display_map:
+            self._render_queue.put_handler(self._handlers[channel], self._display_map.index(channel))
 
-        return pack_map
+    def _on_update_level(self, channel: ChannelIdentifier, _) -> None:
+        if channel in self._display_map:
+            self._render_queue.put_handler(self._handlers[channel], self._display_map.index(channel))
 
-    @staticmethod
-    def get_type_packing(channels: List[Channel]) -> Dict[int, Channel]:
-        channels_by_type = {True: [], False: []}
+    def _on_update_channel_selection(self, channel: Optional[ChannelIdentifier]) -> None:
+        def update_if_affected(ch: Optional[ChannelIdentifier]):
+            if ch is not None and ch in self._display_map:
+                self._render_queue.put_handler(self._handlers[ch], self._display_map.index(ch))
 
-        for channel in channels:
-            if not channel.is_visible or (feed_type := channel.identifier.is_mono_feed) is None:
+        with self._layout_lock:
+            if channel not in self._display_map:
+                if self._selected_channel is not None:
+                    update_if_affected(self._selected_channel)
+                    self._selected_channel = None
+                    return
+
+            update_if_affected(channel)
+            if channel != self._selected_channel:
+                update_if_affected(self._selected_channel)
+                self._selected_channel = channel
+
+    def add_channel(self, channel: ChannelIdentifier, render_handler: Callable) -> None:
+        self._handlers[channel] = render_handler
+
+    def get_channel(self, key) -> Optional[ChannelIdentifier]:
+        return self._display_map[key]
+
+    def enable_static_strategy(self) -> None:
+        self._display_map = list(self._handlers.keys())
+
+        for key, channel in enumerate(self._display_map):
+            self._render_queue.put_handler(self._handlers[channel], key)
+
+        # Track mute changes to channels
+        self._dlive.on_update_mute.append(self._on_update_mute)
+
+    def enable_color_group_strategy(self, colors: List[Color], default_handler: Callable) -> None:
+        def execute():
+            self._apply_color_group_strategy(colors, default_handler)
+
+        def on_change(channel=None, value=None):
+            if channel in self._handlers.keys():
+                execute()
+
+        # Execute once and for all changes that affect display/ordering
+        execute()
+        self._dlive.on_update_color.append(on_change)
+        self._dlive.on_update_label.append(on_change)
+
+        # Track changes to channels
+        self._dlive.on_update_color.append(self._on_update_color)
+        self._dlive.on_update_label.append(self._on_update_label)
+        self._dlive.on_update_mute.append(self._on_update_mute)
+        self._dlive.on_update_level.append(self._on_update_level)
+
+    def _apply_color_group_strategy(self, colors: List[Color], default_handler: Callable) -> None:
+        color_groups: OrderedDict[Color, List[ChannelIdentifier]] = OrderedDict(map(lambda c: (c, []), colors))
+
+        for channel in self._handlers.keys():
+            if not color_groups.get(color := self._dlive.get_color(channel), None) is not None:
                 continue
 
-            channels_by_type[feed_type].append(channel)
+            label = self._dlive.get_label(channel)
+            if label.has_name and not label.is_suppressed_in_overview:
+                color_groups[color].append(channel)
 
-        def pack(leave_space: bool = True) -> Dict[int, Channel]:
-            index = 0
-            pack_map: Dict[int, Channel] = {}
+        # build a display map
+        def pack_channels(avoid_break: bool = True, leave_space: bool = True):
+            _map: List[Optional[ChannelIdentifier]] = []
 
-            for channel_block in channels_by_type.values():
-                for channel in channel_block:
-                    pack_map[index] = channel
-                    index += 1
+            for group in color_groups.values():
+                space_8 = 8 - len(_map) % 8
+                length = len(group)
 
-                if leave_space and index % 8 != 0:
-                    index += 1
+                if avoid_break and 8 >= length > space_8:
+                    _map += [None] * space_8
 
-            return pack_map
+                for ch in group:
+                    _map.append(ch)
 
-        # avoid bank breaks
-        pack_map = pack()
+                if leave_space and length > 0 and len(_map) % 8 != 0:
+                    _map += [None]
 
-        if len(pack_map) == 0:
-            return pack_map
+            if len(_map) > self._length:
+                if not avoid_break and not leave_space:
+                    return _map[: self._length]
 
-        # fall back to not leaving space
-        if max(pack_map) > 8:
-            pack_map = pack(leave_space=False)
+                return False
 
-        return pack_map
+            return _map
 
-    @staticmethod
-    def get_out_split_packing(left: List[OutputChannel], right: List[OutputChannel]) -> Dict[int, OutputChannel]:
-        channels_left = list(filter(lambda c: c.is_visible, left))
-        channels_right = list(filter(lambda c: c.is_visible, right))
+        display_map = (
+            pack_channels() or pack_channels(leave_space=False) or pack_channels(avoid_break=False, leave_space=False)
+        )
+        display_map += [None] * (self._length - len(display_map))
 
-        len_left = len(channels_left)
-        len_right = len(channels_right)
+        # update affected channels
+        with self._layout_lock:
+            for key in range(self._length):
+                if self._display_map[key] != display_map[key]:
+                    if (channel := display_map[key]) is not None:
+                        self._render_queue.put_handler(self._handlers[channel], key)
+                    else:
+                        self._render_queue.put_handler(default_handler, key)
 
-        if len_left <= 8:
-            space = 8 - len_left
-        else:
-            if (len_left + len_right + 1) < 15:
-                space = 1
-            else:
-                space = 0
-
-        pack_map: Dict[int, Channel] = {}
-
-        index = 0
-
-        for channel in channels_left:
-            pack_map[index] = channel
-            index += 1
-
-        index += space
-
-        for channel in channels_right:
-            pack_map[index] = channel
-            index += 1
-
-        return pack_map
+            self._display_map = display_map
