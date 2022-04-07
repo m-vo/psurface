@@ -11,12 +11,19 @@ dlive:
   # see lower number of range selected in Utility/Control/MIDI (default: 12)
   midi_bank_offset: 12
 
-streamdeck:
-    devices:
-      # device serials
-      system: 'AL47J2C09831'
-      input: 'CL15K1A02081'
-      output: 'CL50K2A03473'
+ui:
+  streamdeck_devices:
+    # device serials
+    system: 'AL47J2C09831'
+    input: 'CL15K1A02081'
+    output: 'CL50K2A03473'
+
+  # comma separated list of color, that determine how colored groups are
+  # displayed on the left/right streamdeck; available colors:
+  # [BLUE, LIGHT_BLUE, YELLOW, RED, GREEN, PURPLE, WHITE, BLACK]
+  color_listing:
+    input:  BLUE, LIGHT_BLUE, YELLOW, RED, GREEN, PURPLE
+    output: RED, PURPLE, GREEN, YELLOW
 
 control:
   tracking:
@@ -28,16 +35,15 @@ control:
     # aux channels
     number_of_mono_aux: 6
     mono_aux_start: 1
-    number_of_stereo_aux: 0
+    number_of_stereo_aux: 4
 
-    # external FX channels (via aux)
-    number_of_external_fx: 10
+    # external fx channels (via aux)
+    number_of_external_fx: 8
     external_fx_start: 7
 
     # fx channels
-    number_of_mono_fx: 6
-    number_of_stereo_fx: 0
-    number_of_fx_returns: 6
+    number_of_mono_fx: 8
+    number_of_stereo_fx: 1
 
     # first of 16 virtual input channels
     virtual_start: 101
@@ -60,32 +66,3 @@ control:
     custom_aux: 461
     custom_fx: 462
     custom_util: 463
-
-timing:
-  # grace time [s] after requesting a channel's properties startup
-  channel_init_grace: 0.01
-
-  # grace time [s] after hydrating a channel's sends on startup;
-  # the value gets multiplied by the amount of output channels
-  hydration_grace_multiplier: 0.01
-
-  # poll interval [s] after which the color properties of all channels
-  # are re-requested; the first value gets multiplied by the amount
-  # of channels, the second one ensures a minimum
-  session_poll_channel_multiplier: 0.04
-  session_poll_min: 20
-
-  # poll interval [s] after which the level, label and mute status of
-  # all channels are re-requested; set to 0 to disable
-  channel_poll: 0
-
-  # time [s] after which the ui is booted; too small values will
-  # significantly slow down the sync
-  ui_startup_delay: 5
-
-  # minimum wait time after another button inducing a v-channel state
-  # change can be pressed
-  button_throttling: 0.25
-
-  # sliding window rate cap for requests per second
-  outbound_capacity_limit: 150

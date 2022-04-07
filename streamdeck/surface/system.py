@@ -1,122 +1,184 @@
-import os
+from typing import Optional, Callable, Dict
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 from StreamDeck.Devices import StreamDeck
 from StreamDeck.ImageHelpers import PILHelper
 
 from app import App
-from state.layers import LayerController
-from state.session import Session
-from streamdeck.surface.surface import Surface
+from dlive.api import DLive
+from dlive.entity import ChannelIdentifier
+from dlive.virtual import LayerController, LayerMode
+from streamdeck.surface.surface import Surface, Assets
+from streamdeck.util import ChannelRenderer
 
 
 class SystemSurface(Surface):
-    KEY_BRIGHTNESS = 4
-    KEY_S_DCA = 0
-    KEY_S_DCA_RESTORE = 1
-    KEY_S_DCA_ACCEPT = 2
-    KEY_DATA_STATUS = 8
-    KEY_STATUS = 9
-    KEY_DIRECT_ACTION = 13
-    KEY_HOME = 14
+    accepts_direct_action = False
 
-    PREFIX = "sys"
+    KEY_BRIGHTNESS = 4
+    KEY_INFO = 0
+    KEY_MIXING = 14
+    KEY_CUSTOM_AUX_MASTER = 7
+    KEY_CUSTOM_FX_MASTER = 8
+    KEY_CUSTOM_UTIL_MASTER = 9
+    KEY_TALK_TO_MONITOR = 5
+    KEY_TALK_TO_STAGE = 6
+    KEY_SENDS_TARGET = 10
+    KEY_CHANNEL_FILTER = 11
+    KEY_DIRECT_ACTION = 12
 
     def __init__(
         self,
         device: StreamDeck,
-        session: Session,
+        dlive: DLive,
         layer_controller: LayerController,
-    ):
-        super(SystemSurface, self).__init__(device, session, layer_controller)
+        delegates: Dict[str, Callable],
+    ) -> None:
+        super().__init__(device, dlive, layer_controller)
 
-        self._assets["icon_brightness"] = os.path.join(self._assets_path, "brightness.png")
-        self._assets["icon_direct"] = os.path.join(self._assets_path, "direct.png")
-        self._assets["icon_left"] = os.path.join(self._assets_path, "left.png")
-        self._assets["icon_back"] = os.path.join(self._assets_path, "back.png")
-        self._assets["icon_check"] = os.path.join(self._assets_path, "check.png")
+        self._ui_delegates = delegates
 
-        # listen to and display status updates
-        def update_status() -> None:
-            self._set_image(self.KEY_STATUS, self._render_status())
+        self._set_image(self.KEY_INFO, self._render_static_info())
 
-        App.settings.status_changed_event.append(update_status)
-        update_status()
+        # Mixing and other layer modes
+        def display_mode_selects(mode: LayerMode) -> None:
+            self._set_image(self.KEY_MIXING, self._render_mixing_button(mode == LayerMode.MIXING))
 
-        # listen to and display data status updates
-        def update_data_status(has_inbound_data: bool) -> None:
-            self._set_image(self.KEY_DATA_STATUS, self._render_data_status(has_inbound_data))
+            self._set_image(self.KEY_CUSTOM_AUX_MASTER, self._render_custom_select("AUX", mode == LayerMode.CUSTOM_AUX))
 
-        App.inbound_data_changed_event.append(update_data_status)
-        update_data_status(False)
+            self._set_image(self.KEY_CUSTOM_FX_MASTER, self._render_custom_select("FX", mode == LayerMode.CUSTOM_FX))
 
-    def init(self):
-        super(SystemSurface, self).init()
+            self._set_image(
+                self.KEY_CUSTOM_UTIL_MASTER, self._render_custom_select("UTIL", mode == LayerMode.CUSTOM_UTIL)
+            )
 
-        def setup_selects() -> None:
-            self._set_image(self.KEY_S_DCA, self._render_s_dca_button())
-            self._set_image(self.KEY_S_DCA + 1, self._render_s_dca_restore_button())
-            self._set_image(self.KEY_S_DCA + 2, self._render_s_dca_accept_button())
+        display_mode_selects(self._layer_controller.get_mode())
+        layer_controller.on_mode_changed.append(display_mode_selects)
 
-        self._layer_controller.selection_update_event.append(setup_selects)
-        setup_selects()
+        # Filter and send target modifiers
+        def display_layer_modifiers(target: Optional[str] = None, value: bool = False) -> None:
+            if not target or target == "filter":
+                self._set_image(self.KEY_CHANNEL_FILTER, self._render_channel_filter_toggle(value))
 
-        def update_direct_action() -> None:
-            self._set_image(self.KEY_DIRECT_ACTION, self._render_direct_action_button())
+            if not target or target == "sends_target":
+                self._set_image(self.KEY_SENDS_TARGET, self._render_sends_target_toggle(value))
 
-        App.settings.direct_action_changed_event.append(update_direct_action)
-        update_direct_action()
+        display_layer_modifiers()
+        layer_controller.on_modifier_changed.append(display_layer_modifiers)
 
-        # init brightness
-        self._update_brightness()
+        # Direct action, brightness and other UI only modifiers
+        self._display_action_modifier()
+        self._display_brightness_selector()
 
-    def _on_key_down(self, key: int) -> None:
+        # Channels
+        self._channel_renderer = ChannelRenderer(dlive, layer_controller, 2)
+
+        self._channel_renderer.add_channel(
+            dlive.talk_to_stage_channel,
+            lambda k: self._set_image(
+                self.KEY_TALK_TO_STAGE, self._render_talk_to("STAGE.", dlive.talk_to_stage_channel)
+            ),
+        )
+
+        self._channel_renderer.add_channel(
+            dlive.talk_to_monitor_channel,
+            lambda k: self._set_image(
+                self.KEY_TALK_TO_MONITOR, self._render_talk_to("MON.", dlive.talk_to_monitor_channel)
+            ),
+        )
+
+        self._channel_renderer.enable_static_strategy()
+
+    def _display_action_modifier(self) -> None:
+        self._set_image(self.KEY_DIRECT_ACTION, self._render_direct_action_toggle())
+
+    def _display_brightness_selector(self) -> None:
+        self._set_image(self.KEY_BRIGHTNESS, self._render_brightness_indicator())
+
+    def _on_key_down(self, key: int):
         super()._on_key_down(key)
 
-        if key == self.KEY_BRIGHTNESS:
-            App.settings.increase_brightness()
+        if key == self.KEY_MIXING:
+            self._layer_controller.select_mixing_mode()
+            return
+
+        if key == self.KEY_CUSTOM_AUX_MASTER:
+            self._layer_controller.select_custom_aux_mode()
+            return
+
+        if key == self.KEY_CUSTOM_FX_MASTER:
+            self._layer_controller.select_custom_fx_mode()
+            return
+
+        if key == self.KEY_CUSTOM_UTIL_MASTER:
+            self._layer_controller.select_custom_util_mode()
+            return
+
+        if key == self.KEY_SENDS_TARGET:
+            self._layer_controller.toggle_sends_target()
+            return
+
+        if key == self.KEY_CHANNEL_FILTER:
+            self._layer_controller.toggle_channel_filter()
             return
 
         if key == self.KEY_DIRECT_ACTION:
-            App.settings.toggle_direct_action()
-
-    def _on_key_up(self, key: int) -> None:
-        super()._on_key_up(key)
-
-        if key == self.KEY_S_DCA:
-            self._layer_controller.enable_s_dca_mode()
+            self._ui_delegates["toggle_direct_action"]()
+            self._display_action_modifier()
             return
 
-        if key == self.KEY_S_DCA_RESTORE:
-            self._layer_controller.restore_s_dca_values()
+        if key == self.KEY_BRIGHTNESS:
+            self._ui_delegates["toggle_brightness"]()
+            self._display_brightness_selector()
             return
 
-        if key == self.KEY_S_DCA_ACCEPT:
-            self._layer_controller.accept_s_dca_values()
+        if key == self.KEY_TALK_TO_STAGE:
+            self._dlive.change_mute(
+                self._dlive.talk_to_stage_channel, not self._dlive.get_mute(self._dlive.talk_to_stage_channel)
+            )
+            return
 
-    def _on_key_down_long(self, key: int) -> None:
-        super()._on_key_down_long(key)
+        if key == self.KEY_TALK_TO_MONITOR:
+            self._dlive.change_mute(
+                self._dlive.talk_to_monitor_channel, not self._dlive.get_mute(self._dlive.talk_to_monitor_channel)
+            )
+            return
 
-        # ignore direct action for system keys
-        self._on_key_down(key)
-        self._on_key_up(key)
+        if key == self.KEY_INFO:
+            App.notify(self._dlive.__str__())
+            return
 
-    def _update_brightness(self) -> None:
-        super(SystemSurface, self)._update_brightness()
+    def _render_static_info(self) -> Image:
+        image = Image.new("RGB", self._device.key_image_format()["size"], (0, 0, 0))
+        draw = ImageDraw.Draw(image)
 
-        self._set_image(self.KEY_BRIGHTNESS, self._render_brightness_indicator())
+        draw.text(
+            (5, 12),
+            text="pSurface",
+            font=ImageFont.truetype(Assets.font, 14),
+            fill=(200, 200, 200),
+        )
+
+        draw.text(
+            (5, 30),
+            text=f"{App.version}",
+            font=ImageFont.truetype(Assets.font, 10),
+            fill=(200, 200, 200),
+        )
+
+        return image
 
     def _render_brightness_indicator(self) -> Image:
         image = PILHelper.create_scaled_image(
-            self._deck,
-            Image.open(self._assets["icon_brightness"]),
+            self._device,
+            Image.open(Assets.icon_brightness),
             margins=[10, 20, 10, 15],
         )
 
         x = image.width - 10
         y_bot = image.height - 12
         y_top = 12
-        y_level = y_bot - 8 - (App.settings.brightness * (y_bot - y_top - 8) / 4)
+        y_level = y_bot - 8 - (self._ui_delegates["brightness"]() * (y_bot - y_top - 8) / 4)
         width = 3
 
         draw = ImageDraw.Draw(image)
@@ -126,148 +188,130 @@ class SystemSurface(Surface):
 
         return image
 
-    def _render_direct_action_button(self) -> Image:
+    def _render_custom_select(self, label: str, selected: bool) -> Image:
+        image = Image.new(
+            "RGB",
+            self._device.key_image_format()["size"],
+            ("black", (240, 240, 240))[selected],
+        )
+
+        draw = ImageDraw.Draw(image)
+        draw.text(
+            (image.width / 2, image.height / 2),
+            text=label,
+            font=ImageFont.truetype(Assets.font, 25),
+            anchor="mm",
+            fill=((240, 240, 240), (50, 50, 50))[selected],
+        )
+
+        return image
+
+    def _render_mixing_button(self, selected: bool) -> Image:
         image = PILHelper.create_scaled_image(
-            self._deck,
-            Image.open(self._assets["icon_direct"]),
+            self._device,
+            Image.open(Assets.icon_home),
             margins=[16, 18, 18, 15],
         )
 
-        if App.settings.direct_action:
-            active_color = (255, 0, 50)
+        if selected:
+            image = ImageOps.colorize(image.convert("L"), black="white", white="black")
+
+        return image
+
+    def _render_talk_to(self, label: str, channel: ChannelIdentifier) -> Image:
+        image = PILHelper.create_scaled_image(
+            self._device,
+            Image.open(Assets.icon_mic),
+            margins=[8, 35, 37, 0],
+        )
+
+        mute = self._dlive.get_mute(channel)
+        color = ((240, 240, 240), (100, 100, 100))[mute]
+
+        if mute:
+            image = ImageOps.colorize(image.convert("L"), black="black", white=color)
+
+        draw = ImageDraw.Draw(image)
+
+        if mute:
+            draw.line((9, 34, 28, 10), fill=color, width=2)
+
+        draw.text(
+            (image.width / 2, 54),
+            text=label,
+            font=ImageFont.truetype(Assets.font, 16),
+            anchor="mm",
+            fill=color,
+        )
+
+        draw.text(
+            (35, 30),
+            text=f"{channel.bank.short_name} {channel.canonical_index + 1}",
+            font=ImageFont.truetype(Assets.font, 12),
+            anchor="lb",
+            fill=(100, 100, 100),
+        )
+
+        return image
+
+    def _render_sends_target_toggle(self, selected: bool) -> Image:
+        image = self._blank_image
+        draw = ImageDraw.Draw(image)
+
+        self._render_component_badge(
+            draw,
+            (7, 12),
+            "AUX",
+            fill=((50, 50, 50), (170, 0, 170))[not selected],
+            stroke="black",
+        )
+
+        self._render_component_badge(
+            draw,
+            (7, 41),
+            "FX",
+            fill=((50, 50, 50), (0, 255, 0))[selected],
+            stroke="black",
+        )
+
+        return image
+
+    def _render_channel_filter_toggle(self, selected: bool) -> Image:
+        image = PILHelper.create_scaled_image(
+            self._device,
+            Image.open(Assets.icon_filter),
+            margins=[16, 18, 16, 14],
+        )
+
+        if selected:
+            active_color = (255, 0, 0)
             image = ImageOps.colorize(image.convert("L"), black="black", white=active_color)
 
             draw = ImageDraw.Draw(image)
             draw.ellipse(
-                (5, 5, image.width - 10, image.height - 10),
+                (6, 6, image.width - 12, image.height - 12),
                 outline=active_color,
                 width=4,
             )
 
         return image
 
-    def _render_inputs_button(self) -> Image:
-        selected = self._layer_controller.mixing_selected
-
-        image = Image.new(
-            "RGB",
-            self._deck.key_image_format()["size"],
-            ("black", (240, 240, 240))[selected],
+    def _render_direct_action_toggle(self) -> Image:
+        image = PILHelper.create_scaled_image(
+            self._device,
+            Image.open(Assets.icon_direct),
+            margins=[14, 18, 18, 15],
         )
 
-        draw = ImageDraw.Draw(image)
+        if self._ui_delegates["direct_action"]():
+            active_color = (255, 0, 0)
+            image = ImageOps.colorize(image.convert("L"), black="black", white=active_color)
 
-        self._render_component_badge(
-            draw,
-            (7, 10),
-            "Inputs",
-            fill=(50, 50, 50),
-            stroke=("black", "white")[selected],
-        )
-
-        return image
-
-    def _render_s_dca_button(self) -> Image:
-        selected = self._layer_controller.s_dca_selected
-        active = self._layer_controller.s_dca_affected_channels > 0
-
-        image = Image.new(
-            "RGB",
-            self._deck.key_image_format()["size"],
-            ("black", (240, 240, 240))[selected],
-        )
-
-        draw = ImageDraw.Draw(image)
-
-        if selected or active:
-            draw.line((0, 7, 64, 7), fill=(100, 100, 100), width=1)
-            draw.line((0, 58, 64, 58), fill=(100, 100, 100), width=1)
-
-        self._render_component_s_dca_badge(draw, (7, 24), selected)
-
-        return image
-
-    def _render_s_dca_restore_button(self) -> Image:
-        selected = self._layer_controller.s_dca_selected
-        active = self._layer_controller.s_dca_affected_channels > 0
-
-        if not selected and not active:
-            return self._render_blank()
-        else:
-            image = PILHelper.create_scaled_image(
-                self._deck,
-                Image.open(self._assets["icon_back"]),
-                margins=[18, 20, 20, 15],
+            draw = ImageDraw.Draw(image)
+            draw.ellipse(
+                (6, 6, image.width - 12, image.height - 12),
+                outline=active_color,
+                width=4,
             )
-
-        background_color = ("black", (40, 40, 40))[selected]
-        active_values_color = ((100, 100, 100), "red")[active]
-        image = ImageOps.colorize(image.convert("L"), black=background_color, white=active_values_color)
-        draw = ImageDraw.Draw(image)
-
-        draw.line((0, 7, 64, 7), fill=(100, 100, 100), width=1)
-        draw.line((0, 58, 64, 58), fill=(100, 100, 100), width=1)
-
-        return image
-
-    def _render_s_dca_accept_button(self) -> Image:
-        selected = self._layer_controller.s_dca_selected
-        affected_channels = self._layer_controller.s_dca_affected_channels
-        active = affected_channels > 0
-
-        if not selected and not active:
-            return self._render_blank()
-        else:
-            image = PILHelper.create_scaled_image(
-                self._deck,
-                Image.open(self._assets["icon_check"]),
-                margins=[17, 20, 18, 15],
-            )
-
-        background_color = ("black", (40, 40, 40))[selected]
-        active_values_color = ((100, 100, 100), "green")[active]
-        image = ImageOps.colorize(image.convert("L"), black=background_color, white=active_values_color)
-        draw = ImageDraw.Draw(image)
-
-        if active:
-            draw.text(
-                (41, 41),
-                text=f"{affected_channels}",
-                font=ImageFont.truetype(self._assets["font"], 14),
-                anchor="lt",
-                fill=active_values_color,
-            )
-
-        draw.line((0, 7, 64, 7), fill=(100, 100, 100), width=1)
-        draw.line((0, 58, 64, 58), fill=(100, 100, 100), width=1)
-
-        return image
-
-    def _render_status(self) -> Image:
-        image = Image.new("RGB", self._deck.key_image_format()["size"], "black")
-
-        draw = ImageDraw.Draw(image)
-
-        text = App.settings.status.replace(" | ", "\n")
-
-        draw.text(
-            (4, 10),
-            text=text,
-            font=ImageFont.truetype(self._assets["font"], 9),
-            fill=(200, 200, 200),
-        )
-
-        return image
-
-    def _render_data_status(self, has_inbound_data: bool) -> Image:
-        image = Image.new("RGB", self._deck.key_image_format()["size"], "black")
-
-        draw = ImageDraw.Draw(image)
-
-        color = ((50, 50, 50), "white")[has_inbound_data]
-
-        draw.line((20, 20, 20, 38), fill=color, width=2)
-        draw.line((15, 34, 20, 40), fill=color, width=2)
-        draw.line((25, 34, 20, 40), fill=color, width=2)
 
         return image

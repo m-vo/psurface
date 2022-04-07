@@ -11,6 +11,7 @@ pillow = "*"
 wheel = "*"
 apscheduler = "*"
 mido = {editable = true, ref = "dlive-fixes", git = "https://github.com/m-vo/mido.git"}
+tabulate = "*"
 
 [dev-packages]
 black = "*"
