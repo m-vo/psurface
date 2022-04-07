@@ -32,7 +32,9 @@ class PSurface:
             print()
 
         def print_notification(message: str):
-            print(f"> {message}")
+            print(f"> ", end="")
+            for m in message.split("\n"):
+                print(f"{m}")
 
         print(f"pSurface version {App.version}\n")
         App.on_notify.append(print_notification)
@@ -126,6 +128,26 @@ class PSurface:
 
 
 def main():
+    class Unbuffered(object):
+        def __init__(self, stream):
+            self.stream = stream
+
+        def write(self, data):
+            self.stream.write(data)
+            self.stream.flush()
+
+        def writelines(self, datas):
+            self.stream.writelines(datas)
+            self.stream.flush()
+
+        def __getattr__(self, attr):
+            return getattr(self.stream, attr)
+
+    # Make sure console output is not buffered under windows
+    import sys
+
+    sys.stdout = Unbuffered(sys.stdout)
+
     PSurface().run()
 
 

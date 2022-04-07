@@ -41,13 +41,13 @@ class UI:
             device.open()
 
             if (serial := device.get_serial_number()) not in self._device_mapping:
-                App.notify(f"\nFound a deck with an unknown serial '{serial}'.")
+                print(f"\n[ERR] Found a deck with an unknown serial '{serial}'.")
                 device.close()
                 continue
 
             name, min_key_count = self._device_mapping[serial]
             if device.key_count() < min_key_count:
-                App.notify(f"\nDeck matching the serial of '{name}' must have at least {min_key_count} keys.")
+                print(f"\n[ERR] Deck matching the serial of '{name}' must have at least {min_key_count} keys.")
                 device.close()
                 continue
 
@@ -55,7 +55,7 @@ class UI:
             all_decks.remove(name)
 
         if len(all_decks) > 0:
-            App.notify(f"\nMissing deck(s): {', '.join(all_decks)}")
+            print(f"\n[ERR] Missing deck(s): {', '.join(all_decks)}")
             return False
 
         return True
