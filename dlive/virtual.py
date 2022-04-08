@@ -1,12 +1,16 @@
+"""
+ This file is part of the pSurface project. For the full copyright and license
+ information, see the LICENSE file that was distributed with this source code.
+"""
 from enum import Enum, auto
 from threading import Lock
 from time import sleep
-from typing import Set, List, Optional, Callable
+from typing import Callable, List, Optional, Set
 
 from app import App
 from common.event import AsyncEvent
 from dlive.api import DLive
-from dlive.entity import Scene, ChannelIdentifier, Label, Color, Level
+from dlive.entity import ChannelIdentifier, Color, Label, Level, Scene
 
 
 class LayerMode(Enum):

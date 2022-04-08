@@ -1,6 +1,10 @@
-from time import sleep
+"""
+ This file is part of the pSurface project. For the full copyright and license
+ information, see the LICENSE file that was distributed with this source code.
+"""
 from threading import Thread
-from typing import List, Dict, Optional
+from time import sleep
+from typing import Dict, List, Optional
 
 from tabulate import tabulate
 
@@ -8,17 +12,17 @@ from app import App
 from common.event import AsyncEvent
 from dlive.connection import DLiveSocketPort
 from dlive.encoding import (
-    Encoder,
-    Decoder,
-    MuteMessage,
-    SceneMessage,
     ColorMessage,
+    Decoder,
+    Encoder,
     LabelMessage,
     LevelMessage,
+    MuteMessage,
+    SceneMessage,
     SendLevelMessage,
 )
-from dlive.entity import Color, Level, ChannelIdentifier, Bank, Scene, Label
-from dlive.value import TrackedValue, ImmediateValue
+from dlive.entity import Bank, ChannelIdentifier, Color, Label, Level, Scene
+from dlive.value import ImmediateValue, TrackedValue
 
 
 class DLive:

@@ -1,3 +1,7 @@
+"""
+ This file is part of the pSurface project. For the full copyright and license
+ information, see the LICENSE file that was distributed with this source code.
+"""
 from collections import deque
 from dataclasses import dataclass
 from threading import Lock
@@ -7,7 +11,7 @@ from typing import Deque, Optional
 from mido.messages.messages import Message, SysexData
 
 from app import App
-from dlive.entity import ChannelIdentifier, Color, Level, Scene, Label
+from dlive.entity import ChannelIdentifier, Color, Label, Level, Scene
 
 
 class DLiveMessage:

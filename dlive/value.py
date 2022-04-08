@@ -1,7 +1,12 @@
+"""
+ This file is part of the pSurface project. For the full copyright and license
+ information, see the LICENSE file that was distributed with this source code.
+"""
 from collections import deque
-from time import time
 from threading import Lock
-from typing import List, Optional, Generic, TypeVar, Tuple, Deque, Callable, Set
+from time import time
+from typing import Callable, Deque, Generic, List, Optional, Set, Tuple, TypeVar
+
 from common.event import Event
 
 T = TypeVar("T")

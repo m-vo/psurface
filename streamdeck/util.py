@@ -1,7 +1,11 @@
+"""
+ This file is part of the pSurface project. For the full copyright and license
+ information, see the LICENSE file that was distributed with this source code.
+"""
 from collections import OrderedDict
 from queue import Queue
 from threading import Lock, Thread
-from typing import List, Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional
 
 from dlive.api import DLive
 from dlive.entity import ChannelIdentifier, Color

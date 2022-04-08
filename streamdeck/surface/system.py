@@ -1,4 +1,8 @@
-from typing import Optional, Callable, Dict
+"""
+ This file is part of the pSurface project. For the full copyright and license
+ information, see the LICENSE file that was distributed with this source code.
+"""
+from typing import Callable, Dict, Optional
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 from StreamDeck.Devices import StreamDeck
@@ -8,7 +12,7 @@ from app import App
 from dlive.api import DLive
 from dlive.entity import ChannelIdentifier
 from dlive.virtual import LayerController, LayerMode
-from streamdeck.surface.surface import Surface, Assets
+from streamdeck.surface.surface import Assets, Surface
 from streamdeck.util import ChannelRenderer
 
 

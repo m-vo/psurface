@@ -1,6 +1,10 @@
+"""
+ This file is part of the pSurface project. For the full copyright and license
+ information, see the LICENSE file that was distributed with this source code.
+"""
 import sys
 from copy import copy
-from typing import Optional, List
+from typing import List, Optional
 
 import yaml
 
