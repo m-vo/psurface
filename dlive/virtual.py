@@ -16,6 +16,8 @@ class LayerMode(Enum):
     CUSTOM_AUX = auto()
     CUSTOM_FX = auto()
     CUSTOM_UTIL = auto()
+    CUSTOM_GROUP = auto()
+    CUSTOM_DCA = auto()
 
 
 class LayerController:
@@ -51,6 +53,8 @@ class LayerController:
         self._scene_custom_aux = Scene(scene_config["custom_aux"])
         self._scene_custom_fx = Scene(scene_config["custom_fx"])
         self._scene_custom_util = Scene(scene_config["custom_util"])
+        self._scene_custom_group = Scene(scene_config["custom_group"])
+        self._scene_custom_dca = Scene(scene_config["custom_dca"])
 
         # events
         dlive.on_update_scene.append(self._on_scene_change)
@@ -90,6 +94,12 @@ class LayerController:
 
     def select_custom_util_mode(self) -> None:
         self._call_scene_or_handler(self._scene_custom_util)
+
+    def select_custom_group_mode(self) -> None:
+        self._call_scene_or_handler(self._scene_custom_group)
+
+    def select_custom_dca_mode(self) -> None:
+        self._call_scene_or_handler(self._scene_custom_dca)
 
     def _call_scene_or_handler(self, scene: Scene):
         if scene == self._dlive.get_scene():
@@ -170,6 +180,18 @@ class LayerController:
             elif scene == self._scene_custom_util:
                 select_mode(LayerMode.CUSTOM_UTIL)
                 App.notify(f"Custom | UTIL")
+                select_channel(None)
+                self._dlive.change_feedback_source(None)
+
+            elif scene == self._scene_custom_group:
+                select_mode(LayerMode.CUSTOM_GROUP)
+                App.notify(f"Custom | GROUP")
+                select_channel(None)
+                self._dlive.change_feedback_source(None)
+
+            elif scene == self._scene_custom_dca:
+                select_mode(LayerMode.CUSTOM_DCA)
+                App.notify(f"Custom | DCA")
                 select_channel(None)
                 self._dlive.change_feedback_source(None)
 

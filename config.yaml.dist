@@ -66,3 +66,5 @@ control:
     custom_aux: 461
     custom_fx: 462
     custom_util: 463
+    custom_group: 464
+    custom_dca: 465

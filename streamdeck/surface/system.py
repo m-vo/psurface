@@ -16,16 +16,18 @@ class SystemSurface(Surface):
     accepts_direct_action = False
 
     KEY_BRIGHTNESS = 4
-    KEY_INFO = 0
+    KEY_INFO = 3
     KEY_MIXING = 14
     KEY_CUSTOM_AUX_MASTER = 7
-    KEY_CUSTOM_FX_MASTER = 8
+    KEY_CUSTOM_FX_MASTER = 6
     KEY_CUSTOM_UTIL_MASTER = 9
-    KEY_TALK_TO_MONITOR = 5
-    KEY_TALK_TO_STAGE = 6
+    KEY_CUSTOM_GROUP_MASTER = 8
+    KEY_CUSTOM_DCA_MASTER = 5
+    KEY_TALK_TO_MONITOR = 1
+    KEY_TALK_TO_STAGE = 0
     KEY_SENDS_TARGET = 10
     KEY_CHANNEL_FILTER = 11
-    KEY_DIRECT_ACTION = 12
+    KEY_DIRECT_ACTION = 13
 
     def __init__(
         self,
@@ -43,14 +45,15 @@ class SystemSurface(Surface):
         # Mixing and other layer modes
         def display_mode_selects(mode: LayerMode) -> None:
             self._set_image(self.KEY_MIXING, self._render_mixing_button(mode == LayerMode.MIXING))
-
             self._set_image(self.KEY_CUSTOM_AUX_MASTER, self._render_custom_select("AUX", mode == LayerMode.CUSTOM_AUX))
-
             self._set_image(self.KEY_CUSTOM_FX_MASTER, self._render_custom_select("FX", mode == LayerMode.CUSTOM_FX))
-
             self._set_image(
                 self.KEY_CUSTOM_UTIL_MASTER, self._render_custom_select("UTIL", mode == LayerMode.CUSTOM_UTIL)
             )
+            self._set_image(
+                self.KEY_CUSTOM_GROUP_MASTER, self._render_custom_select("GRP", mode == LayerMode.CUSTOM_GROUP)
+            )
+            self._set_image(self.KEY_CUSTOM_DCA_MASTER, self._render_custom_select("DCA", mode == LayerMode.CUSTOM_DCA))
 
         display_mode_selects(self._layer_controller.get_mode())
         layer_controller.on_mode_changed.append(display_mode_selects)
@@ -112,6 +115,14 @@ class SystemSurface(Surface):
 
         if key == self.KEY_CUSTOM_UTIL_MASTER:
             self._layer_controller.select_custom_util_mode()
+            return
+
+        if key == self.KEY_CUSTOM_GROUP_MASTER:
+            self._layer_controller.select_custom_group_mode()
+            return
+
+        if key == self.KEY_CUSTOM_DCA_MASTER:
+            self._layer_controller.select_custom_dca_mode()
             return
 
         if key == self.KEY_SENDS_TARGET:

@@ -86,7 +86,17 @@ class Config:
         data = copy(self._data["control"]["scenes"])
         self._enforce_keys(
             data,
-            ["mixing_start", "virtual_left_start", "virtual_right", "sends", "custom_aux", "custom_fx", "custom_util"],
+            [
+                "mixing_start",
+                "virtual_left_start",
+                "virtual_right",
+                "sends",
+                "custom_aux",
+                "custom_fx",
+                "custom_util",
+                "custom_group",
+                "custom_dca",
+            ],
             "control.scenes",
         )
 
