@@ -28,8 +28,8 @@ class Assets(ABC):
 
 
 class Surface:
-    direct_action: bool = False
-    accepts_direct_action = True
+    shift: bool = False
+    accepts_shift = True
 
     def __init__(self, device: StreamDeck, dlive: DLive, layer_controller: LayerController) -> None:
         self._device = device
@@ -52,25 +52,13 @@ class Surface:
     # Key actions #
     ###############
     def _handle_key_presses(self):
-        prefix = self._device.get_serial_number()
-
         def key_change(_, key: int, state: bool) -> None:
             if state:
-                if self.direct_action:
-                    self._on_key_down_long(key)
-                    return
-
-                App.scheduler.execute_delayed(prefix + "_key_" + repr(key), 1.0, self._on_key_down_long, [key])
-
-                self._on_key_down(key)
+                if self.shift:
+                    self._on_key_shift(key)
+                else:
+                    self._on_key_down(key)
             else:
-                if not App.scheduler.cancel(prefix + "_key_" + repr(key)):
-                    #  skip handler if job was already executed (_on_key_down_long)
-                    return
-
-                if self.direct_action:
-                    return
-
                 self._on_key_up(key)
 
         self._device.set_key_callback(key_change)
@@ -81,7 +69,7 @@ class Surface:
     def _on_key_up(self, key: int):
         pass
 
-    def _on_key_down_long(self, key: int):
+    def _on_key_shift(self, key: int):
         pass
 
     #############

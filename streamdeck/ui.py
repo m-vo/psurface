@@ -32,7 +32,7 @@ class UI:
         }
 
         self._brightness = self.BRIGHTNESS_MAX
-        self._direct_action = False
+        self.shift = False
 
     def find_devices(self) -> bool:
         all_decks = list(map(lambda v: v[0], self._device_mapping.values()))
@@ -77,8 +77,9 @@ class UI:
                 {
                     "brightness": lambda: self.brightness,
                     "toggle_brightness": lambda: self.toggle_brightness(),
-                    "direct_action": lambda: self.direct_action,
-                    "toggle_direct_action": lambda: self.toggle_direct_action(),
+                    "direct_action": lambda: self.shift_down,
+                    "enable_shift": lambda: self.enable_shift(),
+                    "disable_shift": lambda: self.disable_shift(),
                 },
             )
 
@@ -92,8 +93,8 @@ class UI:
         return self._brightness
 
     @property
-    def direct_action(self) -> bool:
-        return self._direct_action
+    def shift_down(self) -> bool:
+        return self.shift
 
     def toggle_brightness(self) -> None:
         self._brightness = (self._brightness + 1) % (self.BRIGHTNESS_MAX + 1)
@@ -107,11 +108,15 @@ class UI:
             value_mapping = (streamdeck_original_map, streamdeck_xl_map)[isinstance(device, StreamDeckXL)]
             device.set_brightness(value_mapping[self._brightness])
 
-    def toggle_direct_action(self) -> None:
-        self._direct_action = not self._direct_action
+    def enable_shift(self) -> None:
+        self.shift = True
+        self._set_direct_action()
+
+    def disable_shift(self) -> None:
+        self.shift = False
         self._set_direct_action()
 
     def _set_direct_action(self) -> None:
         for surface in self._surfaces:
-            if surface.accepts_direct_action:
-                surface.direct_action = self._direct_action
+            if surface.accepts_shift:
+                surface.shift = self.shift

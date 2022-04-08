@@ -23,14 +23,14 @@ class InputSurface(Surface):
             App.config.input_colors, lambda key: self._set_image(key, self._blank_image)
         )
 
-    def _on_key_up(self, key: int) -> None:
-        super()._on_key_up(key)
+    def _on_key_down(self, key: int) -> None:
+        super()._on_key_down(key)
 
         if (channel := self._renderer.get_channel(key)) is not None:
             self._layer_controller.select_input(channel)
 
-    def _on_key_down_long(self, key: int) -> None:
-        super()._on_key_down_long(key)
+    def _on_key_shift(self, key: int) -> None:
+        super()._on_key_shift(key)
 
         if (channel := self._renderer.get_channel(key)) is not None:
             self._dlive.change_mute(channel, not self._dlive.get_mute(channel))

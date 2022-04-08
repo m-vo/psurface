@@ -13,7 +13,7 @@ from streamdeck.util import ChannelRenderer
 
 
 class SystemSurface(Surface):
-    accepts_direct_action = False
+    accepts_shift = False
 
     KEY_BRIGHTNESS = 4
     KEY_INFO = 3
@@ -27,7 +27,7 @@ class SystemSurface(Surface):
     KEY_TALK_TO_STAGE = 0
     KEY_SENDS_TARGET = 10
     KEY_CHANNEL_FILTER = 11
-    KEY_DIRECT_ACTION = 13
+    KEY_SHIFT = 13
 
     def __init__(
         self,
@@ -70,7 +70,7 @@ class SystemSurface(Surface):
         layer_controller.on_modifier_changed.append(display_layer_modifiers)
 
         # Direct action, brightness and other UI only modifiers
-        self._display_action_modifier()
+        self._shift_modifier()
         self._display_brightness_selector()
 
         # Channels
@@ -92,8 +92,8 @@ class SystemSurface(Surface):
 
         self._channel_renderer.enable_static_strategy()
 
-    def _display_action_modifier(self) -> None:
-        self._set_image(self.KEY_DIRECT_ACTION, self._render_direct_action_toggle())
+    def _shift_modifier(self) -> None:
+        self._set_image(self.KEY_SHIFT, self._render_direct_action_toggle())
 
     def _display_brightness_selector(self) -> None:
         self._set_image(self.KEY_BRIGHTNESS, self._render_brightness_indicator())
@@ -133,9 +133,9 @@ class SystemSurface(Surface):
             self._layer_controller.toggle_channel_filter()
             return
 
-        if key == self.KEY_DIRECT_ACTION:
-            self._ui_delegates["toggle_direct_action"]()
-            self._display_action_modifier()
+        if key == self.KEY_SHIFT:
+            self._ui_delegates["enable_shift"]()
+            self._shift_modifier()
             return
 
         if key == self.KEY_BRIGHTNESS:
@@ -157,6 +157,14 @@ class SystemSurface(Surface):
 
         if key == self.KEY_INFO:
             App.notify(self._dlive.__str__())
+            return
+
+    def _on_key_up(self, key: int):
+        super()._on_key_up(key)
+
+        if key == self.KEY_SHIFT:
+            self._ui_delegates["disable_shift"]()
+            self._shift_modifier()
             return
 
     def _render_static_info(self) -> Image:
