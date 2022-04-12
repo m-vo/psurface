@@ -6,11 +6,13 @@ from typing import Dict, List
 
 from StreamDeck.DeviceManager import DeviceManager
 from StreamDeck.Devices import StreamDeck
+from StreamDeck.Devices.StreamDeckOriginalV2 import StreamDeckOriginalV2
 from StreamDeck.Devices.StreamDeckXL import StreamDeckXL
 
 from app import App
 from dlive.api import DLive
 from dlive.virtual import LayerController
+from streamdeck.simulator import Simulator
 from streamdeck.surface.input import InputSurface
 from streamdeck.surface.output import OutputSurface
 from streamdeck.surface.surface import Surface
@@ -67,11 +69,21 @@ class UI:
     def initialize_ui(self, dlive: DLive, layer_controller: LayerController) -> None:
         self._surfaces.clear()
 
-        if (input_deck := self._devices.get("input", None)) is not None:
-            self._surfaces.append(InputSurface(input_deck, dlive, layer_controller))
+        # get real or simulated devices
+        simulator = Simulator()
 
-        if (output_deck := self._devices.get("output", None)) is not None:
-            self._surfaces.append(OutputSurface(output_deck, dlive, layer_controller))
+        if (input_deck := self._devices.get("input", None)) is None:
+            input_deck = simulator.get_device(StreamDeckXL, "i")
+
+        if (system_deck := self._devices.get("system", None)) is None:
+            system_deck = simulator.get_device(StreamDeckOriginalV2, "s")
+
+        if (output_deck := self._devices.get("output", None)) is None:
+            output_deck = simulator.get_device(StreamDeckXL, "o")
+
+        # initialize surfaces
+        self._surfaces.append(InputSurface(input_deck, dlive, layer_controller))
+        self._surfaces.append(OutputSurface(output_deck, dlive, layer_controller))
 
         system_surface = SystemSurface(
             system_deck,
@@ -87,8 +99,12 @@ class UI:
             },
         )
 
-            self._surfaces.append(system_surface)
+        self._surfaces.append(system_surface)
 
+        if simulator.has_devices:
+            simulator.run()
+
+        # initialize global state
         self._set_direct_action()
         self._set_brightness()
 
