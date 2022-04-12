@@ -37,6 +37,7 @@ class Simulator:
             + device_gap * (len(self._instances) - 1),
             height=max(map(lambda i: i._get_height(), self._instances.values())),
             resizable=False,
+            always_on_top=True,
         )
 
         offset = 0
@@ -150,21 +151,21 @@ class SimulatedDevice:  # virtual base class: StreamDeck
 
         # create layout and handlers
         def on_mouse_click(sender, app_data):
-            index = int(app_data[1][len(f"btn_{self._name}_") :])
+            index = int(app_data[1][len(f"btn_{self._name}_"):])
             self.key_callback(self, index, True)
 
         with dpg.item_handler_registry(tag=f"btn_handler_{self._name}") as handler:
             dpg.add_item_clicked_handler(callback=on_mouse_click, button=dpg.mvMouseButton_Left)
 
         with dpg.window(
-            tag=self._name,
-            no_title_bar=True,
-            width=self._get_width(),
-            height=self._get_height(),
-            no_close=True,
-            no_resize=True,
-            pos=[offset, 0],
-            no_move=True,
+                tag=self._name,
+                no_title_bar=True,
+                width=self._get_width(),
+                height=self._get_height(),
+                no_close=True,
+                no_resize=True,
+                pos=[offset, 0],
+                no_move=True,
         ):
             for row in range(rows):
                 for col in range(cols):
