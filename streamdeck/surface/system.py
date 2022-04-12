@@ -138,7 +138,12 @@ class SystemSurface(Surface):
             return
 
         if key == self.KEY_SHIFT:
-            self._ui_delegates["enable_shift"]()
+            if not self._ui_delegates["shift_down"]():
+                self._ui_delegates["enable_shift"]()
+            else:
+                # allow toggling in simulator
+                self._ui_delegates["disable_shift"]()
+
             self._shift_modifier()
             return
 

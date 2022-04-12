@@ -73,19 +73,19 @@ class UI:
         if (output_deck := self._devices.get("output", None)) is not None:
             self._surfaces.append(OutputSurface(output_deck, dlive, layer_controller))
 
-        if (system_deck := self._devices.get("system", None)) is not None:
-            system_surface = SystemSurface(
-                system_deck,
-                dlive,
-                layer_controller,
-                {
-                    "brightness": lambda: self.brightness,
-                    "toggle_brightness": lambda: self.toggle_brightness(),
-                    "direct_action": lambda: self.shift_down,
-                    "enable_shift": lambda: self.enable_shift(),
-                    "disable_shift": lambda: self.disable_shift(),
-                },
-            )
+        system_surface = SystemSurface(
+            system_deck,
+            dlive,
+            layer_controller,
+            {
+                "brightness": lambda: self.brightness,
+                "toggle_brightness": lambda: self.toggle_brightness(),
+                "direct_action": lambda: self.shift_down,
+                "shift_down": lambda: self.shift_down,
+                "enable_shift": lambda: self.enable_shift(),
+                "disable_shift": lambda: self.disable_shift(),
+            },
+        )
 
             self._surfaces.append(system_surface)
 
