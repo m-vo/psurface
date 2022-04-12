@@ -20,10 +20,12 @@ promise for upcoming versions is given.
 * Computer running *dLive Director*
 * Computer running *pSurface* (can be the same)
 
-You can start the software without some/any stream deck connected and instead use the command line interface for testing
-features. One of the large stream decks is used to display input channels (we call it "left" or "inputs" deck), the
-other is used to display AUX/FX buses (we call it "right" or "outputs" deck). The small stream deck (the "system" deck)
+One of the large stream decks is used to display input channels (we call it "left" or "inputs" deck), the other is used
+to display AUX/FX buses (we call it "right" or "outputs" deck). The small stream deck (the "system" deck)
 is used to select modes, filters and custom scenes.
+
+You can start the software without some/any stream deck connected - a simulator is then started showing the missing
+devices on the screen. Alternatively, use the command line interface for testing and debugging.
 
 ### Get the software going
 
