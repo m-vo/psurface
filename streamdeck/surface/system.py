@@ -189,7 +189,7 @@ class SystemSurface(Surface):
 
         draw.text(
             (5, 30),
-            text=f"{App.version}",
+            text=f"{App.version[:11]}",
             font=ImageFont.truetype(Assets.font, 10),
             fill=(200, 200, 200),
         )
