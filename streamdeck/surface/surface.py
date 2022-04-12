@@ -15,6 +15,7 @@ from app import App
 from dlive.api import DLive
 from dlive.entity import ChannelIdentifier, Color
 from dlive.virtual import LayerController
+from streamdeck.simulator import SimulatedDevice
 
 
 class Assets(ABC):
@@ -37,6 +38,8 @@ class Surface:
 
     def __init__(self, device: StreamDeck, dlive: DLive, layer_controller: LayerController) -> None:
         self._device = device
+        self.raw_image_data = isinstance(device, SimulatedDevice)
+
         self._dlive = dlive
         self._layer_controller = layer_controller
 
@@ -81,7 +84,10 @@ class Surface:
     #############
     def _set_image(self, key: int, image: Image):
         with self._device:
-            self._device.set_key_image(key, PILHelper.to_native_format(self._device, image))
+            if not self.raw_image_data:
+                image = PILHelper.to_native_format(self._device, image)
+
+            self._device.set_key_image(key, image)
 
     def _render_channel(self, channel: ChannelIdentifier):
         image = Image.new(
