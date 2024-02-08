@@ -280,6 +280,7 @@ class VirtualChannel:
 
         self._dlive.on_update_level.append(self._on_level_changed)
         self._dlive.on_update_mute.append(self._on_mute_changed)
+        self._dlive.on_update_send_level.append(self._on_send_level_changed)
 
     def _on_level_changed(self, channel: ChannelIdentifier, level: Level) -> None:
         if channel != self._channel or self._mode == self._MODE_NONE:
@@ -301,6 +302,24 @@ class VirtualChannel:
 
         if mode == self._MODE_TRACK_MASTER_LEVEL:
             self._dlive.change_level(base_channel, level)
+
+    def _on_send_level_changed(self, channel: ChannelIdentifier, to_channel: ChannelIdentifier, level: Level) -> None:
+        if self._mode != self._MODE_TRACK_SEND_LEVEL:
+            return
+
+        with self._mode_lock:
+            mode = self._mode
+            base_channel = self._base_channel
+            assigned_to_channel = self._to_channel
+
+        if channel != base_channel or to_channel != assigned_to_channel or mode != self._MODE_TRACK_SEND_LEVEL:
+            return
+
+        # This is a feedback loop - we need to add dampening otherwise faders would be jerky
+        def _update_sends_delayed(fader_level):
+            self._dlive.change_level(self._channel, fader_level)
+
+        App.scheduler.execute_delayed("update_sends", 0.5, _update_sends_delayed, [level])
 
     def _on_mute_changed(self, channel: ChannelIdentifier, mute: bool) -> None:
         if channel != self._channel or self._mode == self._MODE_NONE:
