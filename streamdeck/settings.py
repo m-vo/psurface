@@ -49,11 +49,3 @@ class GlobalSettings:
         if self._output_filter:
             self._output_filter = False
             self.filter_changed_event()
-
-    @property
-    def status(self) -> str:
-        return self._status
-
-    def set_status(self, status: str):
-        self._status = status
-        self.status_changed_event()

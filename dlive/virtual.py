@@ -177,7 +177,7 @@ class LayerController:
 
             elif scene == self._scene_custom_fx:
                 select_mode(LayerMode.CUSTOM_FX)
-                App.settings.set_status(f"Custom | FX")
+                App.notify(f"Custom | FX")
                 select_channel(None)
                 self._dlive.change_feedback_source(None)
 
