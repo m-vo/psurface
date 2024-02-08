@@ -26,6 +26,7 @@ class PSurface:
             print("    d      Dump the internal state")
             print("    r      Perform a full resync")
             print("    s<n>   Recall scene n, e.g. 's100'")
+            print("    l      Lock/unlock streamdecks'")
             print()
             print("  Mode of operation")
             print("    i<n>   Select input n, e.g. 'i42'")
@@ -103,6 +104,11 @@ class PSurface:
                 App.notify("Toggle sends target")
                 layer_controller.toggle_sends_target()
                 continue
+
+            if user_input == "l":
+                ui.toggle_lock()
+                state = ("unlocked", "locked")[ui.locked]
+                App.notify(f"The streamdecks are now {state}.")
 
             if length < 2:
                 continue

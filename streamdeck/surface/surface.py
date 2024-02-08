@@ -34,7 +34,8 @@ class Assets(ABC):
 
 class Surface:
     shift: bool = False
-    accepts_shift = True
+    accepts_shift: bool = True
+    lock: bool = False
 
     def __init__(self, device: StreamDeck, dlive: DLive, layer_controller: LayerController) -> None:
         self._device = device
@@ -60,6 +61,9 @@ class Surface:
     ###############
     def _handle_key_presses(self):
         def key_change(_, key: int, state: bool) -> None:
+            if self.lock:
+                return
+
             if state:
                 if self.shift:
                     self._on_key_shift(key)

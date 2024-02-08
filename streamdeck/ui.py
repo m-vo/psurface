@@ -39,6 +39,7 @@ class UI:
 
         self._brightness = self.BRIGHTNESS_MAX
         self.shift = False
+        self.lock = False
 
     def find_devices(self) -> bool:
         all_decks = list(map(lambda v: v[0], self._device_mapping.values()))
@@ -116,17 +117,24 @@ class UI:
     def shift_down(self) -> bool:
         return self.shift
 
+    @property
+    def locked(self) -> bool:
+        return self.lock
+
     def toggle_brightness(self) -> None:
         self._brightness = (self._brightness + 1) % (self.BRIGHTNESS_MAX + 1)
         self._set_brightness()
 
-    def _set_brightness(self) -> None:
+    def _set_brightness(self, brightness=None) -> None:
         streamdeck_original_map = {0: 20, 1: 29, 2: 43, 3: 50, 4: 60}
         streamdeck_xl_map = {0: 18, 1: 28, 2: 43, 3: 65, 4: 100}
 
+        if brightness is None:
+            brightness = self._brightness
+
         for device in self._devices.values():
             value_mapping = (streamdeck_original_map, streamdeck_xl_map)[isinstance(device, StreamDeckXL)]
-            device.set_brightness(value_mapping[self._brightness])
+            device.set_brightness(value_mapping[brightness])
 
     def enable_shift(self) -> None:
         self.shift = True
@@ -135,6 +143,14 @@ class UI:
     def disable_shift(self) -> None:
         self.shift = False
         self._set_direct_action()
+
+    def toggle_lock(self) -> None:
+        self.lock = not self.lock
+
+        for surface in self._surfaces:
+            surface.lock = self.lock
+
+        self._set_brightness((None, 0)[self.locked])
 
     def _set_direct_action(self) -> None:
         for surface in self._surfaces:
