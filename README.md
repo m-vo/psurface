@@ -28,13 +28,18 @@ You can start the software without some/any stream deck connected - a simulator 
 devices on the screen. Alternatively, use the command line interface for testing and debugging.
 
 ### Get the software going
+#### Prerequisites
+Make sure you have the following installed:
+* `Python 3.8` + `pipenv`
+* `git`
+* `LibUSB HIDAPI`, see guide by [abcminiuser's excellent python-elgato-stream library][1]
+* If on Windows, you'll also need to install the [Visual C++ Redistributable libraries][2]
 
-1) Make sure you have `Python 3.8` and `pipenv` installed
-2) Make sure you have `LibUSB HIDAPI` available (see guide by [abcminiuser's excellent python-elgato-stream library][1])
-3) Clone or download the repository
-4) Run `pipenv sync` to install the requirements
-5) Create a `config.yaml` file; use the provided dist file as a starting point: `cp config.yaml.dist config.yaml`
-6) Run `pipenv python psurface` to start the application. If on Windows, execute  `run_loop.bat` instead.
+#### Download + install
+1) Clone the repository
+2) Run `pipenv sync` to install the requirements
+3) Create a `config.yaml` file; use the provided dist file as a starting point: `cp config.yaml.dist config.yaml`
+4) Run `pipenv run python psurface.py` to start the application. If on Windows, execute  `run_loop.bat` instead.
 
 Make sure to at least adjust the mixrack IP and stream deck serial numbers in the `config.yaml`.
 
@@ -94,3 +99,4 @@ Channels are grouped by color. You can configure the order for the left/right de
 colors not mentioned in the config, won't be displayed.
 
 [1]: https://python-elgato-streamdeck.readthedocs.io/en/stable/pages/backend_libusb_hidapi.html
+[2]: https://docs.microsoft.com/en-GB/cpp/windows/latest-supported-vc-redist?view=msvc-170
