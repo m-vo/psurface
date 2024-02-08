@@ -68,3 +68,6 @@ control:
     custom_util: 463
     custom_group: 464
     custom_dca: 465
+
+    # when UI is locked
+    locked: 450

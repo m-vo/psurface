@@ -26,7 +26,7 @@ class PSurface:
             print("    d      Dump the internal state")
             print("    r      Perform a full resync")
             print("    s<n>   Recall scene n, e.g. 's100'")
-            print("    l      Lock/unlock streamdecks'")
+            print("    l      Lock/unlock the UI'")
             print()
             print("  Mode of operation")
             print("    i<n>   Select input n, e.g. 'i42'")
@@ -107,8 +107,13 @@ class PSurface:
 
             if user_input == "l":
                 ui.toggle_lock()
-                state = ("unlocked", "locked")[ui.locked]
-                App.notify(f"The streamdecks are now {state}.")
+
+                if ui.locked:
+                    dlive.change_scene(Scene(App.config.control_scenes["locked"]))
+                    App.notify(f"The system is now locked.")
+                else:
+                    dlive.change_scene(Scene(App.config.control_scenes["mixing_start"]))
+                    App.notify(f"The system is now unlocked again.")
 
             if length < 2:
                 continue
