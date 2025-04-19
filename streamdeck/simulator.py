@@ -87,6 +87,9 @@ class SimulatedDevice:  # virtual base class: StreamDeck
         self.key_callback = lambda ref, key, state: None
         self._name = name
 
+        self._brightness = 100
+        self._last_key_images = {}
+
     def __del__(self):
         pass
 
@@ -121,7 +124,10 @@ class SimulatedDevice:  # virtual base class: StreamDeck
         return True
 
     def set_brightness(self, percent):
-        pass
+        self._brightness = percent
+
+        for key, image in self._last_key_images.items():
+            self.set_key_image(key, image)
 
     def get_serial_number(self):
         return "simulator"
@@ -131,6 +137,7 @@ class SimulatedDevice:  # virtual base class: StreamDeck
 
     def set_key_image(self, key, image):
         self._render_queue.put((key, image))
+        self._last_key_images[key] = image
 
     def _get_width(self) -> int:
         return (self.KEY_PIXEL_WIDTH + self.GAP) * self.KEY_COLS + self.GAP
@@ -184,7 +191,7 @@ class SimulatedDevice:  # virtual base class: StreamDeck
             # update texture
             texture_data = []
             for index, byte in enumerate(list(image.tobytes())):
-                texture_data.append(byte / 255)
+                texture_data.append((byte / 255) * (self._brightness / 100))
                 if index % 3 == 2:
                     texture_data.append(1)  # alpha channel
 
