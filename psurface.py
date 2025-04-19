@@ -66,6 +66,23 @@ class PSurface:
         ui.initialize_ui(dlive, layer_controller)
         print(" [OK]")
 
+        def lock():
+            if not ui.locked:
+                ui.toggle_lock()
+
+            dlive.change_scene(Scene(App.config.control_scenes["locked"]))
+            App.notify(f"The system is now locked.")
+
+        def unlock():
+            if ui.locked:
+                ui.toggle_lock()
+
+            dlive.change_scene(Scene(App.config.control_scenes["mixing_start"]))
+            App.notify(f"The system is now unlocked again.")
+
+        App.on_lock.append(lock)
+        App.on_unlock.append(unlock)
+
         print("\nReady for some music!\nType ? and press [Enter] for a list of commands.\n")
 
         # CLI control loop
@@ -106,14 +123,10 @@ class PSurface:
                 continue
 
             if user_input == "l":
-                ui.toggle_lock()
-
                 if ui.locked:
-                    dlive.change_scene(Scene(App.config.control_scenes["locked"]))
-                    App.notify(f"The system is now locked.")
+                    App.unlock()
                 else:
-                    dlive.change_scene(Scene(App.config.control_scenes["mixing_start"]))
-                    App.notify(f"The system is now unlocked again.")
+                    App.lock()
 
             if length < 2:
                 continue

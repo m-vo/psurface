@@ -96,6 +96,7 @@ class UI:
             {
                 "brightness": lambda: self.brightness,
                 "toggle_brightness": lambda: self.toggle_brightness(),
+                "toggle_lock": lambda: self.toggle_lock(),
                 "direct_action": lambda: self.shift_down,
                 "shift_down": lambda: self.shift_down,
                 "enable_shift": lambda: self.enable_shift(),

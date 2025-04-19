@@ -96,11 +96,22 @@ class SystemSurface(Surface):
 
         self._channel_renderer.enable_static_strategy()
 
+        # Lock screen
+        def _on_lock() -> None:
+            self._set_image(self.KEY_INFO, self._render_lock())
+
+        def _on_unlock() -> None:
+            self._set_image(self.KEY_INFO, self._render_static_info())
+
+        App.on_lock.append(_on_lock)
+        App.on_unlock.append(_on_unlock)
+
     def _shift_modifier(self) -> None:
         self._set_image(self.KEY_SHIFT, self._render_direct_action_toggle())
 
     def _display_brightness_selector(self) -> None:
         self._set_image(self.KEY_BRIGHTNESS, self._render_brightness_indicator())
+        self._set_image(self.KEY_INFO, self._render_static_info())
 
     def _on_key_down(self, key: int):
         super()._on_key_down(key)
@@ -165,7 +176,8 @@ class SystemSurface(Surface):
             return
 
         if key == self.KEY_INFO:
-            App.notify(self._dlive.__str__())
+            App.scheduler.execute_delayed("lock", 3, App.lock)
+
             return
 
     def _on_key_up(self, key: int):
@@ -174,6 +186,11 @@ class SystemSurface(Surface):
         if key == self.KEY_SHIFT:
             self._ui_delegates["disable_shift"]()
             self._shift_modifier()
+            return
+
+        if key == self.KEY_INFO:
+            App.scheduler.cancel("lock")
+
             return
 
     def _render_static_info(self) -> Image:
@@ -191,6 +208,19 @@ class SystemSurface(Surface):
             (5, 30),
             text=f"{App.version[:11]}",
             font=ImageFont.truetype(Assets.font, 10),
+            fill=(200, 200, 200),
+        )
+
+        return image
+
+    def _render_lock(self) -> Image:
+        image = Image.new("RGB", self._device.key_image_format()["size"], (100, 0, 0))
+        draw = ImageDraw.Draw(image)
+
+        draw.text(
+            (4, 24),
+            text="LOCKED",
+            font=ImageFont.truetype(Assets.font, 18),
             fill=(200, 200, 200),
         )
 
