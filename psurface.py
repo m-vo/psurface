@@ -13,6 +13,7 @@ from dlive.connection import DLiveSocketPort
 from dlive.entity import Scene
 from dlive.value import TrackedValue
 from dlive.virtual import LayerController
+from native.os_session import OSSession
 from streamdeck.ui import UI
 
 
@@ -36,13 +37,38 @@ class PSurface:
             print("    x      Toggle sends target (Aux/FX)")
             print()
 
+        print(f"pSurface version {App.version}\n")
+
         def print_notification(message: str):
             print(f"> ", end="")
             for m in message.split("\n"):
                 print(f"{m}")
 
-        print(f"pSurface version {App.version}\n")
+        def lock():
+            if not ui.locked:
+                ui.toggle_lock()
+
+            dlive.change_scene(Scene(App.config.control_scenes["locked"]))
+            App.notify(f"The system is now locked.")
+
+            # Also lock the OS session
+            OSSession.lock()
+
+        def unlock():
+            if ui.locked:
+                ui.toggle_lock()
+
+            dlive.change_scene(Scene(App.config.control_scenes["mixing_start"]))
+            App.notify(f"The system is now unlocked again.")
+
         App.on_notify.append(print_notification)
+        App.on_lock.append(lock)
+        App.on_unlock.append(unlock)
+
+        os_session = OSSession()
+        os_session.on_lock.append(App.lock)
+        os_session.on_unlock.append(App.unlock)
+        os_session.listen()
 
         # Find streamdecks
         print("Finding devices…", end="")
@@ -106,14 +132,10 @@ class PSurface:
                 continue
 
             if user_input == "l":
-                ui.toggle_lock()
-
                 if ui.locked:
-                    dlive.change_scene(Scene(App.config.control_scenes["locked"]))
-                    App.notify(f"The system is now locked.")
+                    App.unlock()
                 else:
-                    dlive.change_scene(Scene(App.config.control_scenes["mixing_start"]))
-                    App.notify(f"The system is now unlocked again.")
+                    App.lock()
 
             if length < 2:
                 continue

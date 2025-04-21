@@ -15,6 +15,8 @@ class App:
     scheduler = Scheduler()
     settings = GlobalSettings()
     on_notify = AsyncEvent()
+    on_lock = AsyncEvent()
+    on_unlock = AsyncEvent()
 
     try:
         version = subprocess.check_output(["git", "describe", "--tags", "--always"]).strip().decode()
@@ -24,3 +26,11 @@ class App:
     @classmethod
     def notify(cls, message: str) -> None:
         cls.on_notify(message)
+
+    @classmethod
+    def lock(cls) -> None:
+        cls.on_lock()
+
+    @classmethod
+    def unlock(cls) -> None:
+        cls.on_unlock()

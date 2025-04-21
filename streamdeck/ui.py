@@ -12,7 +12,7 @@ from StreamDeck.Devices.StreamDeckXL import StreamDeckXL
 from app import App
 from dlive.api import DLive
 from dlive.virtual import LayerController
-from streamdeck.simulator import Simulator
+from streamdeck.simulator import SimulatedDevice, Simulator
 from streamdeck.surface.input import InputSurface
 from streamdeck.surface.output import OutputSurface
 from streamdeck.surface.surface import Surface
@@ -75,12 +75,15 @@ class UI:
 
         if (input_deck := self._devices.get("input", None)) is None:
             input_deck = simulator.get_device(StreamDeckXL, "i")
+            self._devices["input"] = input_deck
 
         if (system_deck := self._devices.get("system", None)) is None:
             system_deck = simulator.get_device(StreamDeckOriginalV2, "s")
+            self._devices["system"] = system_deck
 
         if (output_deck := self._devices.get("output", None)) is None:
             output_deck = simulator.get_device(StreamDeckXL, "o")
+            self._devices["output"] = output_deck
 
         # initialize surfaces
         self._surfaces.append(InputSurface(input_deck, dlive, layer_controller))
@@ -93,6 +96,7 @@ class UI:
             {
                 "brightness": lambda: self.brightness,
                 "toggle_brightness": lambda: self.toggle_brightness(),
+                "toggle_lock": lambda: self.toggle_lock(),
                 "direct_action": lambda: self.shift_down,
                 "shift_down": lambda: self.shift_down,
                 "enable_shift": lambda: self.enable_shift(),
@@ -133,7 +137,11 @@ class UI:
             brightness = self._brightness
 
         for device in self._devices.values():
-            value_mapping = (streamdeck_original_map, streamdeck_xl_map)[isinstance(device, StreamDeckXL)]
+            if isinstance(device, SimulatedDevice):
+                value_mapping = {0: 20, 1: 40, 2: 60, 3: 80, 4: 100}
+            else:
+                value_mapping = (streamdeck_original_map, streamdeck_xl_map)[isinstance(device, StreamDeckXL)]
+
             device.set_brightness(value_mapping[brightness])
 
     def enable_shift(self) -> None:

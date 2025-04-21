@@ -4,15 +4,15 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-python-rtmidi = "*"
+python-rtmidi = "1.5.8"
 PyYAML = "*"
-streamdeck = "*"
-pillow = "*"
+streamdeck = "0.9"
+pillow = "9.1"
 wheel = "*"
-apscheduler = "*"
-mido = {editable = true, ref = "dlive-fixes", git = "https://github.com/m-vo/mido.git"}
+apscheduler = "3.9.1"
+mido = {editable = true, ref = "dlive-fixes-1.3.3", git = "https://github.com/m-vo/mido.git"}
 tabulate = "*"
-dearpygui = "*"
+dearpygui = "1.5"
 
 [dev-packages]
 black = "*"
