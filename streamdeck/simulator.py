@@ -36,7 +36,7 @@ class Simulator:
             width=sum(map(lambda i: i._get_width(), self._instances.values()))
             + device_gap * (len(self._instances) - 1),
             height=max(map(lambda i: i._get_height(), self._instances.values())),
-            resizable=False,
+            resizable=True,
             always_on_top=True,
         )
 
